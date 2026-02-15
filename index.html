@@ -26,8 +26,8 @@
     <div class="row">
       <label>Import Type</label>
       <select id="type">
-        <option value="chart1">Chart 1 — Invoiced Sales (Sales Group ID)</option>
-        <option value="chart2">Chart 2 — Invoiced Sales From PF ID</option>
+        <option value="chart1">Chart 1 - Invoiced Sales (Sales Group ID)</option>
+        <option value="chart2">Chart 2 - Invoiced Sales From PF ID</option>
       </select>
     </div>
     <div class="row">
@@ -47,13 +47,13 @@
   <script>
     const log = (msg) => {
       const el = document.getElementById("log");
-      el.textContent += "\\n" + msg;
+      el.textContent += "\n" + msg;
       el.scrollTop = el.scrollHeight;
     };
 
     const normalize = (s) => (s || "")
-      .replace(/^\\uFEFF/, "")
-      .replace(/\\s+/g, " ")
+      .replace(/^\uFEFF/, "")
+      .replace(/\s+/g, " ")
       .trim();
 
     const setProgress = (pct) => {
@@ -128,17 +128,16 @@
             const pct = Math.round(((i + batch.length) / rows.length) * 100);
             setProgress(pct);
 
-            log(\`Batch \${i/batchSize + 1}: updated=\${updated}, notFound=\${notFound}, errors=\${errors}\`);
+            log("Batch " + (i/batchSize + 1) + ": updated=" + updated + ", notFound=" + notFound + ", errors=" + errors);
           }
 
-          // Build results CSV
           const headers = Object.keys(rows[0] || {});
           const out = ["Status,Reason," + headers.join(",")];
           resultRows.forEach(r => {
             const row = headers.map(h => (r.row[h] ?? "")).join(",");
             out.push([r.status, r.reason || "", row].join(","));
           });
-          resultsCSV = out.join("\\n");
+          resultsCSV = out.join("\n");
 
           document.getElementById("btnDownload").disabled = false;
           log("DONE. Updated=" + updated + ", Not Found=" + notFound + ", Errors=" + errors);
