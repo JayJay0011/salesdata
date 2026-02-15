@@ -156,6 +156,7 @@ export default async function handler(req, res) {
   };
 
   let updated = 0, notFound = 0, errors = 0;
+  const results = [];
 
   for (const rowRaw of rows) {
     try {
@@ -163,16 +164,24 @@ export default async function handler(req, res) {
       Object.keys(rowRaw).forEach(k => row[normalize(k)] = rowRaw[k]);
 
       const keyVal = (row[normalize(keyHeader)] || "").trim();
-      if (!keyVal) { errors++; continue; }
+      if (!keyVal) {
+        errors++;
+        results.push({ status: "ERROR", reason: "Missing key", row });
+        continue;
+      }
 
       const found = await call("crm.company.list", {
         filter: { [keyField]: keyVal },
         select: ["ID"],
       });
 
-      if (!found || found.length === 0) { notFound++; continue; }
-      const id = found[0].ID;
+      if (!found || found.length === 0) {
+        notFound++;
+        results.push({ status: "NOT_FOUND", reason: keyHeader + "=" + keyVal, row });
+        continue;
+      }
 
+      const id = found[0].ID;
       const fields = {};
       Object.keys(map).forEach(h => {
         const v = row[normalize(h)];
@@ -181,10 +190,12 @@ export default async function handler(req, res) {
 
       await call("crm.company.update", { id, fields });
       updated++;
+      results.push({ status: "UPDATED", reason: "ID=" + id, row });
     } catch (e) {
       errors++;
+      results.push({ status: "ERROR", reason: e.message, row: rowRaw });
     }
   }
 
-  return res.json({ updated, notFound, errors });
+  return res.json({ updated, notFound, errors, results });
 }
