@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
   <div class="card">
     <div class="card-header">
-      <h3>Marketing Code Sales (PF-Based)</h3>
+      <h3>Invoiced Sales From PF ID</h3>
       <button class="btn" id="btnExportMarketing">Export Marketing CSV</button>
     </div>
     <table id="table-marketing">
