@@ -15,27 +15,31 @@ export default async function handler(req, res) {
   <style>
     :root { --col1: 34%; --col: 16.5%; }
     body { font-family: Arial, sans-serif; padding: 14px; background: #f6f8fb; }
-    h3 { margin: 8px 0 6px; }
+    h3 { margin: 0; }
     .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .btn { background: #2f6ae5; color: #fff; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .btn { background: #2f6ae5; color: #fff; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
     .card { background: #fff; padding: 14px; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.06); margin-bottom: 14px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
     table { border-collapse: collapse; width: 100%; table-layout: fixed; }
     th, td { border: 1px solid #e3e6eb; padding: 6px 8px; font-size: 13px; }
     th { background: #f1f3f6; text-align: left; }
     td.num { text-align: right; }
     colgroup col.c1 { width: var(--col1); }
     colgroup col.c2, col.c3, col.c4, col.c5 { width: var(--col); }
-    .muted { color: #666; font-size: 12px; margin-bottom: 6px; }
+    .muted { color: #666; font-size: 12px; }
   </style>
 </head>
 <body>
   <div class="toolbar">
     <div class="muted" id="status">Loading...</div>
-    <button class="btn" id="btnExport">Export CSV</button>
+    <button class="btn" id="btnExportBoth">Export Both CSV</button>
   </div>
 
   <div class="card">
-    <h3>Invoiced Sales for Entire Sales Group</h3>
+    <div class="card-header">
+      <h3>Invoiced Sales for Entire Sales Group</h3>
+      <button class="btn" id="btnExportInvoiced">Export Invoiced CSV</button>
+    </div>
     <table id="table-invoiced">
       <colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"><col class="c5"></colgroup>
       <thead>
@@ -46,7 +50,10 @@ export default async function handler(req, res) {
   </div>
 
   <div class="card">
-    <h3>Marketing Code Sales (PF-Based)</h3>
+    <div class="card-header">
+      <h3>Marketing Code Sales (PF-Based)</h3>
+      <button class="btn" id="btnExportMarketing">Export Marketing CSV</button>
+    </div>
     <table id="table-marketing">
       <colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"><col class="c5"></colgroup>
       <thead>
@@ -113,30 +120,39 @@ export default async function handler(req, res) {
       tbody.appendChild(trTotal);
     }
 
-    function exportCSV() {
+    function tableToCSV(tableId) {
+      const rows = document.querySelectorAll(tableId + " tr");
       const lines = [];
-      function tableToCSV(title, tableId) {
-        lines.push(title);
-        const rows = document.querySelectorAll(tableId + " tr");
-        rows.forEach(r => {
-          const cols = Array.from(r.children).map(td => td.innerText.replace(/\\n/g, " "));
-          lines.push(cols.join(","));
-        });
-        lines.push("");
-      }
-      tableToCSV("Invoiced Sales", "#table-invoiced");
-      tableToCSV("Marketing Code Sales", "#table-marketing");
+      rows.forEach(r => {
+        const cols = Array.from(r.children).map(td => td.innerText.replace(/\\n/g, " "));
+        lines.push(cols.join(","));
+      });
+      return lines.join("\\n");
+    }
 
-      const blob = new Blob([lines.join("\\n")], { type: "text/csv" });
+    function exportCSV(filename, content) {
+      const blob = new Blob([content], { type: "text/csv" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "sales-data.csv";
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
     }
 
-    document.getElementById("btnExport").addEventListener("click", exportCSV);
+    document.getElementById("btnExportInvoiced").addEventListener("click", () => {
+      exportCSV("invoiced-sales.csv", tableToCSV("#table-invoiced"));
+    });
+
+    document.getElementById("btnExportMarketing").addEventListener("click", () => {
+      exportCSV("marketing-code-sales.csv", tableToCSV("#table-marketing"));
+    });
+
+    document.getElementById("btnExportBoth").addEventListener("click", () => {
+      const both = "Invoiced Sales\\n" + tableToCSV("#table-invoiced") + "\\n\\n" +
+                   "Marketing Code Sales\\n" + tableToCSV("#table-marketing");
+      exportCSV("sales-data.csv", both);
+    });
 
     BX24.init(function() {
       const placementOptions = ${JSON.stringify(params.PLACEMENT_OPTIONS || "")};
