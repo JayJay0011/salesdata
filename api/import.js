@@ -20,6 +20,7 @@ export default async function handler(req, res) {
   if (!WEBHOOK) return res.status(500).json({ error: "Missing BITRIX_WEBHOOK env var." });
 
   const normalize = (s) => (s || "").replace(/\s+/g, " ").trim();
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   const SALES_GROUP_FIELD = "UF_CRM_1737151067313";
   const PF_ID_FIELD = "UF_CRM_1737150815389";
@@ -127,15 +128,23 @@ export default async function handler(req, res) {
     return String(v).replace(/,/g, "").trim();
   };
 
-  const callRaw = async (method, params) => {
+  const callRaw = async (method, params, attempt = 0) => {
     const url = WEBHOOK.replace(/\/$/, "") + `/${method}.json`;
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
     });
+
     const data = await r.json();
-    if (data.error) throw new Error(data.error_description || data.error);
+
+    if (data.error) {
+      if ((data.error_description || "").toLowerCase().includes("too many requests") && attempt < 5) {
+        await sleep(500 * (attempt + 1));
+        return callRaw(method, params, attempt + 1);
+      }
+      throw new Error(data.error_description || data.error);
+    }
     return data;
   };
 
@@ -194,6 +203,7 @@ export default async function handler(req, res) {
         await callRaw("crm.company.update", { id, fields });
         updated++;
         results.push({ status: "UPDATED", reason: "ID=" + id, row });
+        await sleep(150);
       }
     } catch (e) {
       errors++;
