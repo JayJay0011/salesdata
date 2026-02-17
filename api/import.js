@@ -170,35 +170,29 @@ export default async function handler(req, res) {
         continue;
       }
 
-     const found = await call("crm.company.list", {
-  filter: { [keyField]: keyVal },
-  select: ["ID"],
-});
+      const found = await call("crm.company.list", {
+        filter: { [keyField]: keyVal },
+        select: ["ID"],
+      });
 
-if (!found || found.length === 0) {
-  notFound++;
-  results.push({ status: "NOT_FOUND", reason: keyHeader + "=" + keyVal, row });
-  continue;
-}
+      if (!found || found.length === 0) {
+        notFound++;
+        results.push({ status: "NOT_FOUND", reason: keyHeader + "=" + keyVal, row });
+        continue;
+      }
 
-for (const item of found) {
-  const id = item.ID;
-  await call("crm.company.update", { id, fields });
-  updated++;
-  results.push({ status: "UPDATED", reason: "ID=" + id, row });
-}
-
-
-      const id = found[0].ID;
       const fields = {};
       Object.keys(map).forEach(h => {
         const v = row[normalize(h)];
         fields[map[h]] = cleanNumber(v);
       });
 
-      await call("crm.company.update", { id, fields });
-      updated++;
-      results.push({ status: "UPDATED", reason: "ID=" + id, row });
+      for (const item of found) {
+        const id = item.ID;
+        await call("crm.company.update", { id, fields });
+        updated++;
+        results.push({ status: "UPDATED", reason: "ID=" + id, row });
+      }
     } catch (e) {
       errors++;
       results.push({ status: "ERROR", reason: e.message, row: rowRaw });
