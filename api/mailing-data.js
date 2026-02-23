@@ -186,74 +186,78 @@ export default async function handler(req, res) {
     }
 
     BX24.init(function() {
-      const placement = params.PLACEMENT || "";
-      const placementOptions = ${JSON.stringify(params.PLACEMENT_OPTIONS || "")};
-      const options = placementOptions ? JSON.parse(placementOptions) : {};
-      const recordId = options.ID || options.id;
+  const placement = params.PLACEMENT || "";
+  const placementOptions = ${JSON.stringify(params.PLACEMENT_OPTIONS || "")};
+  const options = placementOptions ? JSON.parse(placementOptions) : {};
+  const recordId = options.ID || options.id;
 
-      if (!recordId) {
-        document.getElementById("status").innerText = "No record ID in placement options.";
+  if (!recordId) {
+    document.getElementById("status").innerText = "No record ID in placement options.";
+    return;
+  }
+
+  BX24.callMethod("user.current", {}, function(u) {
+    const user = u.data() || {};
+    const canEdit = ALLOWED_EDIT_USER_IDS.length === 0 || ALLOWED_EDIT_USER_IDS.includes(user.ID);
+    setEditable(canEdit);
+  });
+
+  const loadCompany = (companyId) => {
+    if (!companyId) {
+      document.getElementById("status").innerText = "No linked company for this contact.";
+      document.getElementById("saveBtn").classList.add("disabled");
+      return;
+    }
+    BX24.callMethod("crm.company.get", { id: companyId }, function(result) {
+      if (result.error()) {
+        document.getElementById("status").innerText = "Error: " + result.error();
         return;
       }
+      const data = result.data();
+      buildGrid(data);
+      document.getElementById("status").innerText = "Loaded.";
+      document.getElementById("exportBtn").onclick = function() { exportCSV(data); };
+    });
 
-      BX24.callMethod("user.current", {}, function(u) {
-        const user = u.data() || {};
-        const canEdit = ALLOWED_EDIT_USER_IDS.length === 0 || ALLOWED_EDIT_USER_IDS.includes(user.ID);
-        setEditable(canEdit);
+    document.getElementById("saveBtn").onclick = function() {
+      const fields = {};
+      document.querySelectorAll("#grid input[type=checkbox]").forEach(cb => {
+        fields[cb.dataset.field] = cb.checked ? "Y" : "N";
       });
+      document.querySelectorAll("#grid input[type=text]").forEach(tb => {
+        fields[tb.dataset.field] = tb.value || "";
+      });
+      fields[MD56] = document.getElementById("md56").value || "";
+      fields[MD57] = document.getElementById("md57").value || "";
 
-      const loadCompany = (companyId) => {
-        if (!companyId) {
-          document.getElementById("status").innerText = "No linked company.";
-          document.getElementById("saveBtn").classList.add("disabled");
+      BX24.callMethod("crm.company.update", { id: companyId, fields }, function(res) {
+        if (res.error()) {
+          document.getElementById("status").innerText = "Save error: " + res.error();
           return;
         }
-        BX24.callMethod("crm.company.get", { id: companyId }, function(result) {
-          if (result.error()) {
-            document.getElementById("status").innerText = "Error: " + result.error();
-            return;
-          }
-          const data = result.data();
-          buildGrid(data);
-          document.getElementById("status").innerText = "Loaded.";
-          document.getElementById("exportBtn").onclick = function() { exportCSV(data); };
-        });
+        document.getElementById("status").innerText = "Saved.";
+      });
+    };
+  };
 
-        document.getElementById("saveBtn").onclick = function() {
-          const fields = {};
-          document.querySelectorAll("#grid input[type=checkbox]").forEach(cb => {
-            fields[cb.dataset.field] = cb.checked ? "Y" : "N";
-          });
-          document.querySelectorAll("#grid input[type=text]").forEach(tb => {
-            fields[tb.dataset.field] = tb.value || "";
-          });
+  const isContactPlacement =
+    placement === "CRM_CONTACT_DETAIL_TAB" ||
+    options.ENTITY_TYPE_ID === 3 ||
+    options.entityTypeId === 3;
 
-          fields[MD56] = document.getElementById("md56").value || "";
-          fields[MD57] = document.getElementById("md57").value || "";
-
-          BX24.callMethod("crm.company.update", { id: companyId, fields }, function(res) {
-            if (res.error()) {
-              document.getElementById("status").innerText = "Save error: " + res.error();
-              return;
-            }
-            document.getElementById("status").innerText = "Saved.";
-          });
-        };
-      };
-
-      if (placement === "CRM_CONTACT_DETAIL_TAB") {
-        BX24.callMethod("crm.contact.get", { id: recordId }, function(r) {
-          if (r.error()) {
-            document.getElementById("status").innerText = "Error: " + r.error();
-            return;
-          }
-          const contact = r.data() || {};
-          loadCompany(contact.COMPANY_ID);
-        });
-      } else {
-        loadCompany(recordId);
+  if (isContactPlacement) {
+    BX24.callMethod("crm.contact.get", { id: recordId }, function(r) {
+      if (r.error()) {
+        document.getElementById("status").innerText = "Contact error: " + r.error();
+        return;
       }
+      const contact = r.data() || {};
+      loadCompany(contact.COMPANY_ID);
     });
+  } else {
+    loadCompany(recordId);
+  }
+});
   </script>
 </body>
 </html>`;
