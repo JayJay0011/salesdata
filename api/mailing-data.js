@@ -75,9 +75,17 @@ export default async function handler(req, res) {
       "Healthcare","Physical Education","Science","Technology","SI Manufacturing","Spare"
     ];
 
-    // MD1..MD55
+    // Year row (text fields)
+    const yearFields = [
+      "UF_CRM_1771848988",
+      "UF_CRM_1771849025",
+      "UF_CRM_1771849056",
+      "UF_CRM_1771849090",
+      "UF_CRM_1771849117"
+    ];
+
+    // MD6..MD55 checkboxes (row-major order, 10 rows x 5)
     const mdFields = [
-      "UF_CRM_1771788890","UF_CRM_1771789194","UF_CRM_1771789262","UF_CRM_1771789587","UF_CRM_1771789699",
       "UF_CRM_1771789836","UF_CRM_1771790018","UF_CRM_1771790115","UF_CRM_1771790185","UF_CRM_1771790236",
       "UF_CRM_1771790548","UF_CRM_1771790604","UF_CRM_1771790703","UF_CRM_1771790773","UF_CRM_1771790830",
       "UF_CRM_1771790898","UF_CRM_1771791372","UF_CRM_1771791434","UF_CRM_1771792066","UF_CRM_1771792115",
@@ -94,16 +102,29 @@ export default async function handler(req, res) {
     const MD57 = "UF_CRM_1771797165";
     const DB_DIR = "UF_CRM_1737893463724";
 
-    // Placeholder: add Bitrix group IDs here when available
-    const ALLOWED_EDIT_GROUP_IDS = [];
+    // User-based permissions
+    const ALLOWED_EDIT_USER_IDS = [1, 26];
 
     const isChecked = (v) => v === "Y" || v === "1" || v === true;
 
     function buildGrid(data) {
       const tbody = document.querySelector("#grid tbody");
       tbody.innerHTML = "";
+
+      // Year row (text)
+      const trYear = document.createElement("tr");
+      trYear.innerHTML = "<td class='cat'>Year</td>";
+      for (let i = 0; i < 5; i++) {
+        const field = yearFields[i];
+        const td = document.createElement("td");
+        td.innerHTML = "<input type='text' data-field='" + field + "' value='" + (data[field] || "") + "' />";
+        trYear.appendChild(td);
+      }
+      tbody.appendChild(trYear);
+
+      // Remaining rows (checkboxes)
       let idx = 0;
-      for (let r = 0; r < categories.length; r++) {
+      for (let r = 1; r < categories.length; r++) {
         const tr = document.createElement("tr");
         tr.innerHTML = "<td class='cat'>" + categories[r] + "</td>";
         for (let c = 0; c < 5; c++) {
@@ -115,17 +136,15 @@ export default async function handler(req, res) {
         }
         tbody.appendChild(tr);
       }
+
       document.getElementById("md56").value = data[MD56] || "";
       document.getElementById("md57").value = data[MD57] || "";
       document.getElementById("dbdir").value = data[DB_DIR] || "";
     }
 
     function setEditable(canEdit) {
-      const gridInputs = document.querySelectorAll("#grid input[type=checkbox]");
-      const inputs = [document.getElementById("md56"), document.getElementById("md57")];
-
+      const inputs = document.querySelectorAll("#grid input, #md56, #md57");
       if (!canEdit) {
-        gridInputs.forEach(i => i.disabled = true);
         inputs.forEach(i => i.disabled = true);
         document.getElementById("saveBtn").classList.add("disabled");
       }
@@ -134,8 +153,20 @@ export default async function handler(req, res) {
     function exportCSV(data) {
       const headers = ["Category","Current Year","Last Year","Two Years Ago","Three Years Ago","Do Not Mail"];
       const rows = [];
+
+      // Year row
+      rows.push([
+        "Year",
+        data[yearFields[0]] || "",
+        data[yearFields[1]] || "",
+        data[yearFields[2]] || "",
+        data[yearFields[3]] || "",
+        data[yearFields[4]] || ""
+      ]);
+
+      // checkbox rows
       let idx = 0;
-      for (let r = 0; r < categories.length; r++) {
+      for (let r = 1; r < categories.length; r++) {
         const row = [categories[r]];
         for (let c = 0; c < 5; c++) {
           const field = mdFields[idx++];
@@ -143,6 +174,7 @@ export default async function handler(req, res) {
         }
         rows.push(row);
       }
+
       rows.push(["Mailing Data Source", data[MD56] || ""]);
       rows.push(["Customer Comments", data[MD57] || ""]);
       rows.push(["Database Directory", data[DB_DIR] || ""]);
@@ -169,8 +201,7 @@ export default async function handler(req, res) {
 
       BX24.callMethod("user.current", {}, function(u) {
         const user = u.data() || {};
-        const groups = user.UF_USER_GROUP || [];
-        const canEdit = ALLOWED_EDIT_GROUP_IDS.length === 0 || groups.some(g => ALLOWED_EDIT_GROUP_IDS.includes(g));
+        const canEdit = ALLOWED_EDIT_USER_IDS.length === 0 || ALLOWED_EDIT_USER_IDS.includes(user.ID);
         setEditable(canEdit);
       });
 
@@ -193,6 +224,10 @@ export default async function handler(req, res) {
         document.querySelectorAll("#grid input[type=checkbox]").forEach(cb => {
           fields[cb.dataset.field] = cb.checked ? "Y" : "N";
         });
+        document.querySelectorAll("#grid input[type=text]").forEach(tb => {
+          fields[tb.dataset.field] = tb.value || "";
+        });
+
         fields[MD56] = document.getElementById("md56").value || "";
         fields[MD57] = document.getElementById("md57").value || "";
 
