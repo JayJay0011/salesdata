@@ -1,263 +1,287 @@
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return res.status(405).send("Method Not Allowed");
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+  const { password, type, rows } = body || {};
+
+  if (!password || !type || !Array.isArray(rows)) {
+    return res.status(400).json({ error: "Missing password, type, or rows." });
   }
 
-  const params = { ...req.query, ...(req.body || {}) };
+  if (rows.length > 2000) {
+    return res.status(400).json({ error: "Max 2000 rows per run. Please split the file." });
+  }
 
-  const html = `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Mailing Data</title>
-  <script src="https://api.bitrix24.com/api/v1/"></script>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 14px; background: #f6f8fb; }
-    .card { background:#fff; padding:14px; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.06); }
-    h3 { margin: 0 0 8px; }
-    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
-    th, td { border: 1px solid #e3e6eb; padding: 6px 8px; font-size: 13px; text-align: center; }
-    th { background: #0c5b80; color: #fff; text-align: left; }
-    td.cat { text-align:left; color:#1aa24a; font-weight:600; }
-    .row { display:flex; gap:12px; margin-top:12px; }
-    .row label { min-width:220px; color:#1aa24a; font-weight:600; }
-    .row input { flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:6px; }
-    .readonly { background:#f3f3f3; }
-    .actions { margin-top:12px; display:flex; gap:8px; }
-    .btn { background:#2f6ae5; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; }
-    .btn.secondary { background:#4b5563; }
-    .muted { color:#666; font-size:12px; margin:6px 0; }
-    .disabled { opacity:0.6; pointer-events:none; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h3>Mailing Data</h3>
-    <div class="muted" id="status">Loading...</div>
+  if (password !== process.env.IMPORT_PASSWORD) {
+    return res.status(401).json({ error: "Invalid password." });
+  }
 
-    <table id="grid">
-      <thead>
-        <tr>
-          <th>Category</th>
-          <th>Current Year</th>
-          <th>Last Year</th>
-          <th>Two Years Ago</th>
-          <th>Three Years Ago</th>
-          <th>Do Not Mail</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+  const WEBHOOK = process.env.BITRIX_WEBHOOK;
+  if (!WEBHOOK) return res.status(500).json({ error: "Missing BITRIX_WEBHOOK env var." });
 
-    <div class="row">
-      <label>Mailing Data Source:</label>
-      <input id="md56" type="text" />
-    </div>
-    <div class="row">
-      <label>Customer Comments:</label>
-      <input id="md57" type="text" />
-    </div>
-    <div class="row">
-      <label>Database Directory:</label>
-      <input id="dbdir" type="text" class="readonly" readonly />
-    </div>
+  const normalize = (s) => (s || "").replace(/\s+/g, " ").trim();
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-    <div class="actions">
-      <button class="btn" id="saveBtn">Save</button>
-      <button class="btn secondary" id="exportBtn">Export CSV</button>
-    </div>
-  </div>
+  const SALES_GROUP_FIELD = "UF_CRM_1737151067313";
+  const PF_ID_FIELD = "UF_CRM_1737150815389";
+  const DB_DIR_FIELD = "UF_CRM_1737893463724";
 
-  <script>
-    const categories = [
-      "Year","Arts & Crafts","Elementary Math","Early Years","General Education",
-      "Healthcare","Physical Education","Science","Technology","SI Manufacturing","Spare"
-    ];
+  const CHART1_MAP = {
+    "Arts and Crafts – YTD Sales": "UF_CRM_1770346519029",
+    "Arts and Crafts – Last Year Sales": "UF_CRM_1770346601362",
+    "Arts and Crafts – Two Years Ago Sales": "UF_CRM_1770346643167",
+    "Arts and Crafts – Three Years Ago Sales": "UF_CRM_1770346666348",
+    "Elementary Math – YTD Sales": "UF_CRM_1770346926448",
+    "Elementary Math – Last Year Sales": "UF_CRM_1770346992533",
+    "Elementary Math – Two Years Ago Sales": "UF_CRM_1770347026066",
+    "Elementary Math – Three Years Ago Sales": "UF_CRM_1770347079857",
+    "Early Years – YTD Sales": "UF_CRM_1770360667616",
+    "Early Years – Last Year Sales": "UF_CRM_1770360695368",
+    "Early Years – Two Years Ago Sales": "UF_CRM_1770360720872",
+    "Early Years – Three Years Ago Sales": "UF_CRM_1770360751650",
+    "Healthcare – YTD Sales": "UF_CRM_1770360789212",
+    "Healthcare – Last Year Sales": "UF_CRM_1770360812010",
+    "Healthcare – Two Years Ago Sales": "UF_CRM_1770361799968",
+    "Healthcare – Three Years Ago Sales": "UF_CRM_1770361841245",
+    "Literacy – YTD Sales": "UF_CRM_1770361936776",
+    "Literacy – Last Year Sales": "UF_CRM_1770361960160",
+    "Literacy – Two Years Ago Sales": "UF_CRM_1770361981561",
+    "Literacy – Three Years Ago Sales": "UF_CRM_1770362137775",
+    "Physical Education – YTD Sales": "UF_CRM_1770362174363",
+    "Physical Education – Last Year Sales": "UF_CRM_1770362192096",
+    "Physical Education – Two Years Ago Sales": "UF_CRM_1770362213135",
+    "Physical Education – Three Years Ago Sales": "UF_CRM_1770362230995",
+    "Science – YTD Sales": "UF_CRM_1770362325383",
+    "Science – Last Year Sales": "UF_CRM_1770386723470",
+    "Science – Two Years Ago Sales": "UF_CRM_1770386746335",
+    "Science – Three Years Ago Sales": "UF_CRM_1770386765185",
+    "Special Education – YTD Sales": "UF_CRM_1770386875393",
+    "Special Education – Last Year Sales": "UF_CRM_1770386899802",
+    "Special Education – Two Years Ago Sales": "UF_CRM_1770386958233",
+    "Special Education – Three Years Ago Sales": "UF_CRM_1770387029159",
+    "SI Manufacturing – YTD Sales": "UF_CRM_1770387074621",
+    "SI Manufacturing – Last Year Sales": "UF_CRM_1770387092521",
+    "SI Manufacturing – Two Years Ago Sales": "UF_CRM_1770387116755",
+    "SI Manufacturing – Three Years Ago Sales": "UF_CRM_1770387141172",
+    "Technology – YTD Sales": "UF_CRM_1770387187354",
+    "Technology – Last Year Sales": "UF_CRM_1770387208104",
+    "Technology – Two Years Ago Sales": "UF_CRM_1770387227913",
+    "Technology – Three Years Ago Sales": "UF_CRM_1770387261150",
+    "YTD Total Sales": "UF_CRM_1771085744",
+    "Last Year Total Sales": "UF_CRM_1771085781",
+    "Two Years Ago Total Sales": "UF_CRM_1771085952",
+    "Three Years Ago Total Sales": "UF_CRM_1771086032",
+  };
 
-    // Year row (text fields)
-    const yearFields = [
-      "UF_CRM_1771848988",
-      "UF_CRM_1771849025",
-      "UF_CRM_1771849056",
-      "UF_CRM_1771849090",
-      "UF_CRM_1771849117"
-    ];
+  const CHART2_MAP = {
+    "Arts & Crafts – YTD Marketing Code Sales": "UF_CRM_1770387505317",
+    "Arts & Crafts – Last Year Marketing Code Sales": "UF_CRM_1770748984796",
+    "Arts & Crafts – Two Years Ago Marketing Code Sales": "UF_CRM_1770749172206",
+    "Arts & Crafts – Three Years Ago Marketing Code Sales": "UF_CRM_1770749245434",
+    "Elementary Math – YTD Marketing Code Sales": "UF_CRM_1770387624455",
+    "Elementary Math – Last Year Marketing Code Sales": "UF_CRM_1770749630183",
+    "Elementary Math – Two Years Ago Marketing Code Sales": "UF_CRM_1770749668085",
+    "Elementary Math – Three Years Ago Marketing Code Sales": "UF_CRM_1770749802133",
+    "Early Years – YTD Marketing Code Sales": "UF_CRM_1770387644036",
+    "Early Years – Last Year Marketing Code Sales": "UF_CRM_1770750087257",
+    "Early Years – Two Years Ago Marketing Code Sales": "UF_CRM_1770750231099",
+    "Early Years – Three Years Ago Marketing Code Sales": "UF_CRM_1770750387093",
+    "Healthcare – YTD Marketing Code Sales": "UF_CRM_1770387665592",
+    "Healthcare – Last Year Marketing Code Sales": "UF_CRM_1770750847374",
+    "Healthcare – Two Years Ago Marketing Code Sales": "UF_CRM_1770750890072",
+    "Healthcare – Three Years Ago Marketing Code Sales": "UF_CRM_1770750913403",
+    "Literacy – YTD Marketing Code Sales": "UF_CRM_1770387680074",
+    "Literacy – Last Year Marketing Code Sales": "UF_CRM_1770795946833",
+    "Literacy – Two Years Ago Marketing Code Sales": "UF_CRM_1770796077991",
+    "Literacy – Three Years Ago Marketing Code Sales": "UF_CRM_1770796101158",
+    "Physical Education – YTD Marketing Code Sales": "UF_CRM_1770387699509",
+    "Physical Education – Last Year Marketing Code Sales": "UF_CRM_1770812586",
+    "Physical Education – Two Years Ago Marketing Code Sales": "UF_CRM_1770812641",
+    "Physical Education – Three Years Ago Marketing Code Sales": "UF_CRM_1770812673",
+    "Science – YTD Marketing Code Sales": "UF_CRM_1770387717076",
+    "Science – Last Year Marketing Code Sales": "UF_CRM_1770796733017",
+    "Science – Two Years Ago Marketing Code Sales": "UF_CRM_1770796754484",
+    "Science – Three Years Ago Marketing Code Sales": "UF_CRM_1770797142682",
+    "Special Education – YTD Marketing Code Sales": "UF_CRM_1770387739736",
+    "Special Education – Last Year Marketing Code Sales": "UF_CRM_1770797760438",
+    "Special Education – Two Years Ago Marketing Code Sales": "UF_CRM_1770797786453",
+    "Special Education – Three Years Ago Marketing Code Sales": "UF_CRM_1770797814619",
+    "SI Manufacturing – YTD Marketing Code Sales": "UF_CRM_1770387763501",
+    "SI Manufacturing – Last Year Marketing Code Sales": "UF_CRM_1770799082188",
+    "SI Manufacturing – Two Years Ago Marketing Code Sales": "UF_CRM_1770799287395",
+    "SI Manufacturing – Three Years Ago Marketing Code Sales": "UF_CRM_1770799383915",
+    "Technology – YTD Marketing Code Sales": "UF_CRM_1770387783234",
+    "Technology – Last Year Marketing Code Sales": "UF_CRM_1770799796308",
+    "Technology – Two Years Ago Marketing Code Sales": "UF_CRM_1770799819633",
+    "Technology – Three Years Ago Marketing Code Sales": "UF_CRM_1770799843822",
+    "YTD Total PF": "UF_CRM_1771086089",
+    "Last Year Total PF": "UF_CRM_1771086133",
+    "Two Years Ago Total PF": "UF_CRM_1771086200",
+    "Three Years Ago Total PF": "UF_CRM_1771086238",
+  };
 
-    // MD6..MD55 checkboxes
-    const mdFields = [
-      "UF_CRM_1771789836","UF_CRM_1771790018","UF_CRM_1771790115","UF_CRM_1771790185","UF_CRM_1771790236",
-      "UF_CRM_1771790548","UF_CRM_1771790604","UF_CRM_1771790703","UF_CRM_1771790773","UF_CRM_1771790830",
-      "UF_CRM_1771790898","UF_CRM_1771791372","UF_CRM_1771791434","UF_CRM_1771792066","UF_CRM_1771792115",
-      "UF_CRM_1771792400","UF_CRM_1771792467","UF_CRM_1771792520","UF_CRM_1771792572","UF_CRM_1771792836",
-      "UF_CRM_1771792893","UF_CRM_1771792954","UF_CRM_1771793020","UF_CRM_1771793093","UF_CRM_1771793147",
-      "UF_CRM_1771794171","UF_CRM_1771794236","UF_CRM_1771794364","UF_CRM_1771794405","UF_CRM_1771794453",
-      "UF_CRM_1771794524","UF_CRM_1771794587","UF_CRM_1771794635","UF_CRM_1771794694","UF_CRM_1771794772",
-      "UF_CRM_1771794901","UF_CRM_1771795006","UF_CRM_1771795073","UF_CRM_1771795244","UF_CRM_1771795319",
-      "UF_CRM_1771795875","UF_CRM_1771795931","UF_CRM_1771795974","UF_CRM_1771796020","UF_CRM_1771796146",
-      "UF_CRM_1771796660","UF_CRM_1771796772","UF_CRM_1771796835","UF_CRM_1771796899","UF_CRM_1771796982"
-    ];
+  const MAILING_MAP = {
+    const MAILING_MAP = {
+  "MD1": "UF_CRM_1771848988",
+  "MD2": "UF_CRM_1771849025",
+  "MD3": "UF_CRM_1771849056",
+  "MD4": "UF_CRM_1771849090",
+  "MD5": "UF_CRM_1771849117",
+  "MD6": "UF_CRM_1771789836",
+   "MD7": "UF_CRM_1771790018",
+    "MD8": "UF_CRM_1771790115",
+    "MD9": "UF_CRM_1771790185",
+    "MD10": "UF_CRM_1771790236",
+    "MD11": "UF_CRM_1771790548",
+    "MD12": "UF_CRM_1771790604",
+    "MD13": "UF_CRM_1771790703",
+    "MD14": "UF_CRM_1771790773",
+    "MD15": "UF_CRM_1771790830",
+    "MD16": "UF_CRM_1771790898",
+    "MD17": "UF_CRM_1771791372",
+    "MD18": "UF_CRM_1771791434",
+    "MD19": "UF_CRM_1771792066",
+    "MD20": "UF_CRM_1771792115",
+    "MD21": "UF_CRM_1771792400",
+    "MD22": "UF_CRM_1771792467",
+    "MD23": "UF_CRM_1771792520",
+    "MD24": "UF_CRM_1771792572",
+    "MD25": "UF_CRM_1771792836",
+    "MD26": "UF_CRM_1771792893",
+    "MD27": "UF_CRM_1771792954",
+    "MD28": "UF_CRM_1771793020",
+    "MD29": "UF_CRM_1771793093",
+    "MD30": "UF_CRM_1771793147",
+    "MD31": "UF_CRM_1771794171",
+    "MD32": "UF_CRM_1771794236",
+    "MD33": "UF_CRM_1771794364",
+    "MD34": "UF_CRM_1771794405",
+    "MD35": "UF_CRM_1771794453",
+    "MD36": "UF_CRM_1771794524",
+    "MD37": "UF_CRM_1771794587",
+    "MD38": "UF_CRM_1771794635",
+    "MD39": "UF_CRM_1771794694",
+    "MD40": "UF_CRM_1771794772",
+    "MD41": "UF_CRM_1771794901",
+    "MD42": "UF_CRM_1771795006",
+    "MD43": "UF_CRM_1771795073",
+    "MD44": "UF_CRM_1771795244",
+    "MD45": "UF_CRM_1771795319",
+    "MD46": "UF_CRM_1771795875",
+    "MD47": "UF_CRM_1771795931",
+    "MD48": "UF_CRM_1771795974",
+    "MD49": "UF_CRM_1771796020",
+    "MD50": "UF_CRM_1771796146",
+    "MD51": "UF_CRM_1771796660",
+    "MD52": "UF_CRM_1771796772",
+    "MD53": "UF_CRM_1771796835",
+    "MD54": "UF_CRM_1771796899",
+    "MD55": "UF_CRM_1771796982",
+    "MD56": "UF_CRM_1771797127",
+    "MD57": "UF_CRM_1771797165",
+  };
 
-    const MD56 = "UF_CRM_1771797127";
-    const MD57 = "UF_CRM_1771797165";
-    const DB_DIR = "UF_CRM_1737893463724";
+  const map = type === "chart1" ? CHART1_MAP : type === "chart2" ? CHART2_MAP : MAILING_MAP;
+  const keyHeader = type === "chart1" ? "Sales Group ID" : type === "chart2" ? "PF ID" : "Database Directory";
+  const keyField = type === "chart1" ? SALES_GROUP_FIELD : type === "chart2" ? PF_ID_FIELD : DB_DIR_FIELD;
 
-    // User-based permissions
-    const ALLOWED_EDIT_USER_IDS = [1, 26];
+  const cleanNumber = (v) => {
+    if (v === null || v === undefined) return "";
+    return String(v).replace(/,/g, "").trim();
+  };
 
-    const isChecked = (v) => v === "Y" || v === "1" || v === true;
+  const callRaw = async (method, params, attempt = 0) => {
+    const url = WEBHOOK.replace(/\/$/, "") + ${method}.json;
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
 
-    function buildGrid(data) {
-      const tbody = document.querySelector("#grid tbody");
-      tbody.innerHTML = "";
+    const data = await r.json();
 
-      const trYear = document.createElement("tr");
-      trYear.innerHTML = "<td class='cat'>Year</td>";
-      for (let i = 0; i < 5; i++) {
-        const field = yearFields[i];
-        const td = document.createElement("td");
-        td.innerHTML = "<input type='text' data-field='" + field + "' value='" + (data[field] || "") + "' />";
-        trYear.appendChild(td);
+    if (data.error) {
+      if ((data.error_description || "").toLowerCase().includes("too many requests") && attempt < 5) {
+        await sleep(500 * (attempt + 1));
+        return callRaw(method, params, attempt + 1);
       }
-      tbody.appendChild(trYear);
-
-      let idx = 0;
-      for (let r = 1; r < categories.length; r++) {
-        const tr = document.createElement("tr");
-        tr.innerHTML = "<td class='cat'>" + categories[r] + "</td>";
-        for (let c = 0; c < 5; c++) {
-          const field = mdFields[idx++];
-          const checked = isChecked(data[field]);
-          const td = document.createElement("td");
-          td.innerHTML = "<input type='checkbox' data-field='" + field + "'" + (checked ? " checked" : "") + " />";
-          tr.appendChild(td);
-        }
-        tbody.appendChild(tr);
-      }
-
-      document.getElementById("md56").value = data[MD56] || "";
-      document.getElementById("md57").value = data[MD57] || "";
-      document.getElementById("dbdir").value = data[DB_DIR] || "";
+      throw new Error(data.error_description || data.error);
     }
+    return data;
+  };
 
-    function setEditable(canEdit) {
-      const inputs = document.querySelectorAll("#grid input, #md56, #md57");
-      if (!canEdit) {
-        inputs.forEach(i => i.disabled = true);
-        document.getElementById("saveBtn").classList.add("disabled");
-      }
-    }
+  const listAllCompanies = async (fieldCode, value) => {
+    const ids = [];
+    let start = 0;
 
-    function exportCSV(data) {
-      const headers = ["Category","Current Year","Last Year","Two Years Ago","Three Years Ago","Do Not Mail"];
-      const rows = [];
-
-      rows.push([
-        "Year",
-        data[yearFields[0]] || "",
-        data[yearFields[1]] || "",
-        data[yearFields[2]] || "",
-        data[yearFields[3]] || "",
-        data[yearFields[4]] || ""
-      ]);
-
-      let idx = 0;
-      for (let r = 1; r < categories.length; r++) {
-        const row = [categories[r]];
-        for (let c = 0; c < 5; c++) {
-          const field = mdFields[idx++];
-          row.push(isChecked(data[field]) ? "Y" : "N");
-        }
-        rows.push(row);
-      }
-
-      rows.push(["Mailing Data Source", data[MD56] || ""]);
-      rows.push(["Customer Comments", data[MD57] || ""]);
-      rows.push(["Database Directory", data[DB_DIR] || ""]);
-
-      const csv = [headers.join(",")].concat(rows.map(r => r.join(","))).join("\\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "mailing-data.csv";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    BX24.init(function() {
-      const placement = params.PLACEMENT || "";
-      const placementOptions = ${JSON.stringify(params.PLACEMENT_OPTIONS || "")};
-      const options = placementOptions ? JSON.parse(placementOptions) : {};
-      const recordId = options.ID || options.id;
-
-      if (!recordId) {
-        document.getElementById("status").innerText = "No record ID in placement options.";
-        return;
-      }
-
-      BX24.callMethod("user.current", {}, function(u) {
-        const user = u.data() || {};
-        const canEdit = ALLOWED_EDIT_USER_IDS.length === 0 || ALLOWED_EDIT_USER_IDS.includes(user.ID);
-        setEditable(canEdit);
+    while (true) {
+      const data = await callRaw("crm.company.list", {
+        filter: { [fieldCode]: value },
+        select: ["ID"],
+        start,
       });
 
-      const loadCompany = (companyId) => {
-        if (!companyId) {
-          document.getElementById("status").innerText = "No linked company.";
-          document.getElementById("saveBtn").classList.add("disabled");
-          return;
-        }
-        BX24.callMethod("crm.company.get", { id: companyId }, function(result) {
-          if (result.error()) {
-            document.getElementById("status").innerText = "Error: " + result.error();
-            return;
-          }
-          const data = result.data();
-          buildGrid(data);
-          document.getElementById("status").innerText = "Loaded.";
-          document.getElementById("exportBtn").onclick = function() { exportCSV(data); };
-        });
+      const batch = data.result || [];
+      if (batch.length === 0) break;
 
-        document.getElementById("saveBtn").onclick = function() {
-          const fields = {};
-          document.querySelectorAll("#grid input[type=checkbox]").forEach(cb => {
-            fields[cb.dataset.field] = cb.checked ? "Y" : "N";
-          });
-          document.querySelectorAll("#grid input[type=text]").forEach(tb => {
-            fields[tb.dataset.field] = tb.value || "";
-          });
+      batch.forEach(item => ids.push(item.ID));
+      if (data.next === undefined || data.next === null) break;
+      start = data.next;
+    }
 
-          fields[MD56] = document.getElementById("md56").value || "";
-          fields[MD57] = document.getElementById("md57").value || "";
+    return ids;
+  };
 
-          BX24.callMethod("crm.company.update", { id: companyId, fields }, function(res) {
-            if (res.error()) {
-              document.getElementById("status").innerText = "Save error: " + res.error();
-              return;
-            }
-            document.getElementById("status").innerText = "Saved.";
-          });
-        };
-      };
+  let updated = 0, notFound = 0, errors = 0;
+  const results = [];
 
-      if (placement === "CRM_CONTACT_DETAIL_TAB") {
-        BX24.callMethod("crm.contact.get", { id: recordId }, function(r) {
-          if (r.error()) {
-            document.getElementById("status").innerText = "Error: " + r.error();
-            return;
-          }
-          const contact = r.data() || {};
-          loadCompany(contact.COMPANY_ID);
-        });
-      } else {
-        loadCompany(recordId);
+  for (const rowRaw of rows) {
+    try {
+      const row = {};
+      Object.keys(rowRaw).forEach(k => row[normalize(k)] = rowRaw[k]);
+
+      const keyVal = (row[normalize(keyHeader)] || "").trim();
+      if (!keyVal) {
+        errors++;
+        results.push({ status: "ERROR", reason: "Missing key", row });
+        continue;
       }
-    });
-  </script>
-</body>
-</html>`;
 
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  return res.status(200).send(html);
+      const ids = await listAllCompanies(keyField, keyVal);
+
+      if (!ids || ids.length === 0) {
+        notFound++;
+        results.push({ status: "NOT_FOUND", reason: keyHeader + "=" + keyVal, row });
+        continue;
+      }
+
+      const fields = {};
+      Object.keys(map).forEach(h => {
+        const v = row[normalize(h)];
+       if (type === "mailing") {
+  const isCheckbox = h.startsWith("MD") && parseInt(h.slice(2), 10) >= 6 && parseInt(h.slice(2), 10) <= 55;
+  if (isCheckbox) {
+    const vv = String(v || "").trim().toLowerCase();
+    fields[map[h]] = vv === "y" ? "Y" : (vv === "n" ? "N" : v);
+  } else {
+    fields[map[h]] = v;
+  }
+} else {
+  fields[map[h]] = cleanNumber(v);
+}
+      });
+
+      for (const id of ids) {
+        await callRaw("crm.company.update", { id, fields });
+        updated++;
+        results.push({ status: "UPDATED", reason: "ID=" + id, row });
+        await sleep(150);
+      }
+    } catch (e) {
+      errors++;
+      results.push({ status: "ERROR", reason: e.message, row: rowRaw });
+    }
+  }
+
+  return res.json({ updated, notFound, errors, results });
 }
