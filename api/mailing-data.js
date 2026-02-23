@@ -24,9 +24,11 @@ export default async function handler(req, res) {
     .row label { min-width:220px; color:#1aa24a; font-weight:600; }
     .row input { flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:6px; }
     .readonly { background:#f3f3f3; }
-    .actions { margin-top:12px; }
+    .actions { margin-top:12px; display:flex; gap:8px; }
     .btn { background:#2f6ae5; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; }
+    .btn.secondary { background:#4b5563; }
     .muted { color:#666; font-size:12px; margin:6px 0; }
+    .disabled { opacity:0.6; pointer-events:none; }
   </style>
 </head>
 <body>
@@ -63,25 +65,17 @@ export default async function handler(req, res) {
 
     <div class="actions">
       <button class="btn" id="saveBtn">Save</button>
+      <button class="btn secondary" id="exportBtn">Export CSV</button>
     </div>
   </div>
 
   <script>
     const categories = [
-      "Year",
-      "Arts & Crafts",
-      "Elementary Math",
-      "Early Years",
-      "General Education",
-      "Healthcare",
-      "Physical Education",
-      "Science",
-      "Technology",
-      "SI Manufacturing",
-      "Spare"
+      "Year","Arts & Crafts","Elementary Math","Early Years","General Education",
+      "Healthcare","Physical Education","Science","Technology","SI Manufacturing","Spare"
     ];
 
-    // MD1..MD55 in row-major order (5 per row)
+    // MD1..MD55
     const mdFields = [
       "UF_CRM_1771788890","UF_CRM_1771789194","UF_CRM_1771789262","UF_CRM_1771789587","UF_CRM_1771789699",
       "UF_CRM_1771789836","UF_CRM_1771790018","UF_CRM_1771790115","UF_CRM_1771790185","UF_CRM_1771790236",
@@ -99,6 +93,9 @@ export default async function handler(req, res) {
     const MD56 = "UF_CRM_1771797127";
     const MD57 = "UF_CRM_1771797165";
     const DB_DIR = "UF_CRM_1737893463724";
+
+    // Placeholder: add Bitrix group IDs here when available
+    const ALLOWED_EDIT_GROUP_IDS = [];
 
     const isChecked = (v) => v === "Y" || v === "1" || v === true;
 
@@ -123,6 +120,43 @@ export default async function handler(req, res) {
       document.getElementById("dbdir").value = data[DB_DIR] || "";
     }
 
+    function setEditable(canEdit) {
+      const gridInputs = document.querySelectorAll("#grid input[type=checkbox]");
+      const inputs = [document.getElementById("md56"), document.getElementById("md57")];
+
+      if (!canEdit) {
+        gridInputs.forEach(i => i.disabled = true);
+        inputs.forEach(i => i.disabled = true);
+        document.getElementById("saveBtn").classList.add("disabled");
+      }
+    }
+
+    function exportCSV(data) {
+      const headers = ["Category","Current Year","Last Year","Two Years Ago","Three Years Ago","Do Not Mail"];
+      const rows = [];
+      let idx = 0;
+      for (let r = 0; r < categories.length; r++) {
+        const row = [categories[r]];
+        for (let c = 0; c < 5; c++) {
+          const field = mdFields[idx++];
+          row.push(isChecked(data[field]) ? "Y" : "N");
+        }
+        rows.push(row);
+      }
+      rows.push(["Mailing Data Source", data[MD56] || ""]);
+      rows.push(["Customer Comments", data[MD57] || ""]);
+      rows.push(["Database Directory", data[DB_DIR] || ""]);
+
+      const csv = [headers.join(",")].concat(rows.map(r => r.join(","))).join("\\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "mailing-data.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
     BX24.init(function() {
       const placementOptions = ${JSON.stringify(params.PLACEMENT_OPTIONS || "")};
       const options = placementOptions ? JSON.parse(placementOptions) : {};
@@ -133,13 +167,25 @@ export default async function handler(req, res) {
         return;
       }
 
+      BX24.callMethod("user.current", {}, function(u) {
+        const user = u.data() || {};
+        const groups = user.UF_USER_GROUP || [];
+        const canEdit = ALLOWED_EDIT_GROUP_IDS.length === 0 || groups.some(g => ALLOWED_EDIT_GROUP_IDS.includes(g));
+        setEditable(canEdit);
+      });
+
       BX24.callMethod("crm.company.get", { id: companyId }, function(result) {
         if (result.error()) {
           document.getElementById("status").innerText = "Error: " + result.error();
           return;
         }
-        buildGrid(result.data());
+        const data = result.data();
+        buildGrid(data);
         document.getElementById("status").innerText = "Loaded.";
+
+        document.getElementById("exportBtn").onclick = function() {
+          exportCSV(data);
+        };
       });
 
       document.getElementById("saveBtn").onclick = function() {
