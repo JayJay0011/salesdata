@@ -121,12 +121,16 @@ export default async function handler(req, res) {
   };
 
   const MAILING_MAP = {
-    "MD1": "UF_CRM_1771788890",
-    "MD2": "UF_CRM_1771789194",
-    "MD3": "UF_CRM_1771789262",
-    "MD4": "UF_CRM_1771789587",
-    "MD5": "UF_CRM_1771789699",
-    "MD6": "UF_CRM_1771789836",
+  "MD1": "UF_CRM_1771848988",
+  "MD2": "UF_CRM_1771849025",
+  "MD3": "UF_CRM_1771849056",
+  "MD4": "UF_CRM_1771849090",
+  "MD5": "UF_CRM_1771849117",
+   "MD6": "UF_CRM_1771789836",
+   "MD7": "UF_CRM_1771790018",
+   "MD8": "UF_CRM_1771790115",
+   "MD9": "UF_CRM_1771790185",
+   "MD10": "UF_CRM_1771790236",
     "MD7": "UF_CRM_1771790018",
     "MD8": "UF_CRM_1771790115",
     "MD9": "UF_CRM_1771790185",
@@ -257,12 +261,17 @@ export default async function handler(req, res) {
       const fields = {};
       Object.keys(map).forEach(h => {
         const v = row[normalize(h)];
-        if (type === "mailing") {
-          const vv = String(v || "").trim().toLowerCase();
-          fields[map[h]] = vv === "y" ? "Y" : (vv === "n" ? "N" : v);
-        } else {
-          fields[map[h]] = cleanNumber(v);
-        }
+      if (type === "mailing") {
+  const isCheckbox = h.startsWith("MD") && parseInt(h.slice(2), 10) >= 6 && parseInt(h.slice(2), 10) <= 55;
+  if (isCheckbox) {
+    const vv = String(v || "").trim().toLowerCase();
+    fields[map[h]] = vv === "y" ? "Y" : (vv === "n" ? "N" : v);
+  } else {
+    fields[map[h]] = v;
+  }
+} else {
+  fields[map[h]] = cleanNumber(v);
+}
       });
 
       for (const id of ids) {
