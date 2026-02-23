@@ -186,13 +186,13 @@ export default async function handler(req, res) {
     }
 
     BX24.init(function() {
-  const placement = params.PLACEMENT || "";
-  const placementOptions = ${JSON.stringify(params.PLACEMENT_OPTIONS || "")};
-  const options = placementOptions ? JSON.parse(placementOptions) : {};
+  const info = BX24.placement.info ? BX24.placement.info() : {};
+  const placement = info.placement || "";
+  const options = info.options || {};
   const recordId = options.ID || options.id;
 
   if (!recordId) {
-    document.getElementById("status").innerText = "No record ID in placement options.";
+    document.getElementById("status").innerText = "No record ID from placement.";
     return;
   }
 
