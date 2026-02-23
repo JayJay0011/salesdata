@@ -24,6 +24,7 @@ export default async function handler(req, res) {
 
   const SALES_GROUP_FIELD = "UF_CRM_1737151067313";
   const PF_ID_FIELD = "UF_CRM_1737150815389";
+  const DB_DIR_FIELD = "UF_CRM_1737893463724";
 
   const CHART1_MAP = {
     "Arts and Crafts – YTD Sales": "UF_CRM_1770346519029",
@@ -119,9 +120,69 @@ export default async function handler(req, res) {
     "Three Years Ago Total PF": "UF_CRM_1771086238",
   };
 
-  const map = type === "chart1" ? CHART1_MAP : CHART2_MAP;
-  const keyHeader = type === "chart1" ? "Sales Group ID" : "PF ID";
-  const keyField = type === "chart1" ? SALES_GROUP_FIELD : PF_ID_FIELD;
+  const MAILING_MAP = {
+    "MD1": "UF_CRM_1771788890",
+    "MD2": "UF_CRM_1771789194",
+    "MD3": "UF_CRM_1771789262",
+    "MD4": "UF_CRM_1771789587",
+    "MD5": "UF_CRM_1771789699",
+    "MD6": "UF_CRM_1771789836",
+    "MD7": "UF_CRM_1771790018",
+    "MD8": "UF_CRM_1771790115",
+    "MD9": "UF_CRM_1771790185",
+    "MD10": "UF_CRM_1771790236",
+    "MD11": "UF_CRM_1771790548",
+    "MD12": "UF_CRM_1771790604",
+    "MD13": "UF_CRM_1771790703",
+    "MD14": "UF_CRM_1771790773",
+    "MD15": "UF_CRM_1771790830",
+    "MD16": "UF_CRM_1771790898",
+    "MD17": "UF_CRM_1771791372",
+    "MD18": "UF_CRM_1771791434",
+    "MD19": "UF_CRM_1771792066",
+    "MD20": "UF_CRM_1771792115",
+    "MD21": "UF_CRM_1771792400",
+    "MD22": "UF_CRM_1771792467",
+    "MD23": "UF_CRM_1771792520",
+    "MD24": "UF_CRM_1771792572",
+    "MD25": "UF_CRM_1771792836",
+    "MD26": "UF_CRM_1771792893",
+    "MD27": "UF_CRM_1771792954",
+    "MD28": "UF_CRM_1771793020",
+    "MD29": "UF_CRM_1771793093",
+    "MD30": "UF_CRM_1771793147",
+    "MD31": "UF_CRM_1771794171",
+    "MD32": "UF_CRM_1771794236",
+    "MD33": "UF_CRM_1771794364",
+    "MD34": "UF_CRM_1771794405",
+    "MD35": "UF_CRM_1771794453",
+    "MD36": "UF_CRM_1771794524",
+    "MD37": "UF_CRM_1771794587",
+    "MD38": "UF_CRM_1771794635",
+    "MD39": "UF_CRM_1771794694",
+    "MD40": "UF_CRM_1771794772",
+    "MD41": "UF_CRM_1771794901",
+    "MD42": "UF_CRM_1771795006",
+    "MD43": "UF_CRM_1771795073",
+    "MD44": "UF_CRM_1771795244",
+    "MD45": "UF_CRM_1771795319",
+    "MD46": "UF_CRM_1771795875",
+    "MD47": "UF_CRM_1771795931",
+    "MD48": "UF_CRM_1771795974",
+    "MD49": "UF_CRM_1771796020",
+    "MD50": "UF_CRM_1771796146",
+    "MD51": "UF_CRM_1771796660",
+    "MD52": "UF_CRM_1771796772",
+    "MD53": "UF_CRM_1771796835",
+    "MD54": "UF_CRM_1771796899",
+    "MD55": "UF_CRM_1771796982",
+    "MD56": "UF_CRM_1771797127",
+    "MD57": "UF_CRM_1771797165",
+  };
+
+  const map = type === "chart1" ? CHART1_MAP : type === "chart2" ? CHART2_MAP : MAILING_MAP;
+  const keyHeader = type === "chart1" ? "Sales Group ID" : type === "chart2" ? "PF ID" : "Database Directory";
+  const keyField = type === "chart1" ? SALES_GROUP_FIELD : type === "chart2" ? PF_ID_FIELD : DB_DIR_FIELD;
 
   const cleanNumber = (v) => {
     if (v === null || v === undefined) return "";
@@ -196,7 +257,12 @@ export default async function handler(req, res) {
       const fields = {};
       Object.keys(map).forEach(h => {
         const v = row[normalize(h)];
-        fields[map[h]] = cleanNumber(v);
+        if (type === "mailing") {
+          const vv = String(v || "").trim().toLowerCase();
+          fields[map[h]] = vv === "y" ? "Y" : (vv === "n" ? "N" : v);
+        } else {
+          fields[map[h]] = cleanNumber(v);
+        }
       });
 
       for (const id of ids) {
