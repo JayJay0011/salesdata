@@ -84,7 +84,7 @@ export default async function handler(req, res) {
       "UF_CRM_1771849117"
     ];
 
-    // MD6..MD55 checkboxes (row-major order, 10 rows x 5)
+    // MD6..MD55 checkboxes
     const mdFields = [
       "UF_CRM_1771789836","UF_CRM_1771790018","UF_CRM_1771790115","UF_CRM_1771790185","UF_CRM_1771790236",
       "UF_CRM_1771790548","UF_CRM_1771790604","UF_CRM_1771790703","UF_CRM_1771790773","UF_CRM_1771790830",
@@ -111,7 +111,6 @@ export default async function handler(req, res) {
       const tbody = document.querySelector("#grid tbody");
       tbody.innerHTML = "";
 
-      // Year row (text)
       const trYear = document.createElement("tr");
       trYear.innerHTML = "<td class='cat'>Year</td>";
       for (let i = 0; i < 5; i++) {
@@ -122,7 +121,6 @@ export default async function handler(req, res) {
       }
       tbody.appendChild(trYear);
 
-      // Remaining rows (checkboxes)
       let idx = 0;
       for (let r = 1; r < categories.length; r++) {
         const tr = document.createElement("tr");
@@ -154,7 +152,6 @@ export default async function handler(req, res) {
       const headers = ["Category","Current Year","Last Year","Two Years Ago","Three Years Ago","Do Not Mail"];
       const rows = [];
 
-      // Year row
       rows.push([
         "Year",
         data[yearFields[0]] || "",
@@ -164,7 +161,6 @@ export default async function handler(req, res) {
         data[yearFields[4]] || ""
       ]);
 
-      // checkbox rows
       let idx = 0;
       for (let r = 1; r < categories.length; r++) {
         const row = [categories[r]];
@@ -190,12 +186,13 @@ export default async function handler(req, res) {
     }
 
     BX24.init(function() {
+      const placement = params.PLACEMENT || "";
       const placementOptions = ${JSON.stringify(params.PLACEMENT_OPTIONS || "")};
       const options = placementOptions ? JSON.parse(placementOptions) : {};
-      const companyId = options.ID || options.id;
+      const recordId = options.ID || options.id;
 
-      if (!companyId) {
-        document.getElementById("status").innerText = "No company ID in placement options.";
+      if (!recordId) {
+        document.getElementById("status").innerText = "No record ID in placement options.";
         return;
       }
 
@@ -205,40 +202,57 @@ export default async function handler(req, res) {
         setEditable(canEdit);
       });
 
-      BX24.callMethod("crm.company.get", { id: companyId }, function(result) {
-        if (result.error()) {
-          document.getElementById("status").innerText = "Error: " + result.error();
+      const loadCompany = (companyId) => {
+        if (!companyId) {
+          document.getElementById("status").innerText = "No linked company.";
+          document.getElementById("saveBtn").classList.add("disabled");
           return;
         }
-        const data = result.data();
-        buildGrid(data);
-        document.getElementById("status").innerText = "Loaded.";
-
-        document.getElementById("exportBtn").onclick = function() {
-          exportCSV(data);
-        };
-      });
-
-      document.getElementById("saveBtn").onclick = function() {
-        const fields = {};
-        document.querySelectorAll("#grid input[type=checkbox]").forEach(cb => {
-          fields[cb.dataset.field] = cb.checked ? "Y" : "N";
-        });
-        document.querySelectorAll("#grid input[type=text]").forEach(tb => {
-          fields[tb.dataset.field] = tb.value || "";
-        });
-
-        fields[MD56] = document.getElementById("md56").value || "";
-        fields[MD57] = document.getElementById("md57").value || "";
-
-        BX24.callMethod("crm.company.update", { id: companyId, fields }, function(res) {
-          if (res.error()) {
-            document.getElementById("status").innerText = "Save error: " + res.error();
+        BX24.callMethod("crm.company.get", { id: companyId }, function(result) {
+          if (result.error()) {
+            document.getElementById("status").innerText = "Error: " + result.error();
             return;
           }
-          document.getElementById("status").innerText = "Saved.";
+          const data = result.data();
+          buildGrid(data);
+          document.getElementById("status").innerText = "Loaded.";
+          document.getElementById("exportBtn").onclick = function() { exportCSV(data); };
         });
+
+        document.getElementById("saveBtn").onclick = function() {
+          const fields = {};
+          document.querySelectorAll("#grid input[type=checkbox]").forEach(cb => {
+            fields[cb.dataset.field] = cb.checked ? "Y" : "N";
+          });
+          document.querySelectorAll("#grid input[type=text]").forEach(tb => {
+            fields[tb.dataset.field] = tb.value || "";
+          });
+
+          fields[MD56] = document.getElementById("md56").value || "";
+          fields[MD57] = document.getElementById("md57").value || "";
+
+          BX24.callMethod("crm.company.update", { id: companyId, fields }, function(res) {
+            if (res.error()) {
+              document.getElementById("status").innerText = "Save error: " + res.error();
+              return;
+            }
+            document.getElementById("status").innerText = "Saved.";
+          });
+        };
       };
+
+      if (placement === "CRM_CONTACT_DETAIL_TAB") {
+        BX24.callMethod("crm.contact.get", { id: recordId }, function(r) {
+          if (r.error()) {
+            document.getElementById("status").innerText = "Error: " + r.error();
+            return;
+          }
+          const contact = r.data() || {};
+          loadCompany(contact.COMPANY_ID);
+        });
+      } else {
+        loadCompany(recordId);
+      }
     });
   </script>
 </body>
