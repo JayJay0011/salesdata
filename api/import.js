@@ -202,7 +202,6 @@ export default async function handler(req, res) {
         setEditable(canEdit);
       });
 
-      // Determine company ID
       const loadCompany = (companyId) => {
         if (!companyId) {
           document.getElementById("status").innerText = "No linked company.";
@@ -228,6 +227,7 @@ export default async function handler(req, res) {
           document.querySelectorAll("#grid input[type=text]").forEach(tb => {
             fields[tb.dataset.field] = tb.value || "";
           });
+
           fields[MD56] = document.getElementById("md56").value || "";
           fields[MD57] = document.getElementById("md57").value || "";
 
