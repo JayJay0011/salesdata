@@ -5,6 +5,7 @@ export default async function handler(req, res) {
   }
 
   const entityTypeId = process.env.TENDER_ENTITY_TYPE_ID || "";
+  const params = { ...req.query, ...(req.body || {}) };
 
   const html = `<!doctype html>
 <html>
@@ -55,6 +56,8 @@ export default async function handler(req, res) {
 <script>
 (() => {
   const ENTITY_TYPE_ID = Number("${entityTypeId}");
+  const SERVER_PARAMS = ${JSON.stringify(params)};
+
   const FIELD_CODES = [
     "UF_CRM_1772619295","UF_CRM_1772619390","UF_CRM_1772619441","UF_CRM_1772619541","UF_CRM_1772619606",
     "UF_CRM_1772619752","UF_CRM_1772619871","UF_CRM_1772619911","UF_CRM_1772620002","UF_CRM_1772620138",
@@ -70,8 +73,6 @@ export default async function handler(req, res) {
   let labels = {};
   let fieldMeta = {};
   let companyId = null;
-  let contactId = null;
-  let placement = "";
 
   function setStatus(t) { statusEl.textContent = t; }
 
@@ -84,19 +85,30 @@ export default async function handler(req, res) {
     });
   }
 
+  function escapeHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;");
+  }
+
   function createCellInput(code, value) {
     const meta = fieldMeta[code] || {};
-    const type = (meta.type || "").toLowerCase();
+    const type = String(meta.type || "").toLowerCase();
     const v = value == null ? "" : value;
 
     if (type === "date") {
-      const d = String(v).slice(0,10);
+      const d = String(v).slice(0, 10);
       return '<input type="date" data-field="' + code + '" value="' + escapeHtml(d) + '">';
     }
 
     if (type === "enumeration" && Array.isArray(meta.items)) {
       const opts = ['<option value=""></option>'].concat(
-        meta.items.map(i => '<option value="' + escapeHtml(i.VALUE) + '"' + (String(v) === String(i.VALUE) ? " selected" : "") + '>' + escapeHtml(i.VALUE) + '</option>')
+        meta.items.map(i => {
+          const selected = String(v) === String(i.VALUE) ? " selected" : "";
+          return '<option value="' + escapeHtml(i.VALUE) + '"' + selected + '>' + escapeHtml(i.VALUE) + '</option>';
+        })
       ).join("");
       return '<select data-field="' + code + '">' + opts + '</select>';
     }
@@ -106,11 +118,6 @@ export default async function handler(req, res) {
     }
 
     return '<input type="text" data-field="' + code + '" value="' + escapeHtml(v) + '">';
-  }
-
-  function escapeHtml(s) {
-    return String(s == null ? "" : s)
-      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 
   function renderHeader() {
@@ -129,6 +136,7 @@ export default async function handler(req, res) {
 
   function renderRows(items) {
     bodyRows.innerHTML = "";
+
     items.forEach(item => {
       const tr = document.createElement("tr");
       tr.dataset.id = item.id;
@@ -163,8 +171,10 @@ export default async function handler(req, res) {
   async function listItems() {
     const filter = { parentId2: companyId };
     const select = ["id"].concat(FIELD_CODES);
-    const items = await call("crm.item.list", { entityTypeId: ENTITY_TYPE_ID, filter, select });
-    return Array.isArray(items.items) ? items.items : (Array.isArray(items) ? items : []);
+    const data = await call("crm.item.list", { entityTypeId: ENTITY_TYPE_ID, filter, select });
+    if (data && Array.isArray(data.items)) return data.items;
+    if (Array.isArray(data)) return data;
+    return [];
   }
 
   function collectFieldsFromRow(tr) {
@@ -176,10 +186,10 @@ export default async function handler(req, res) {
   }
 
   async function addRow() {
-    const fields = { parentId2: companyId };
-    if (contactId) fields.parentId3 = contactId;
-    const added = await call("crm.item.add", { entityTypeId: ENTITY_TYPE_ID, fields });
-    const id = added.item ? added.item.id : added.id;
+    await call("crm.item.add", {
+      entityTypeId: ENTITY_TYPE_ID,
+      fields: { parentId2: companyId }
+    });
     const items = await listItems();
     renderRows(items);
     setStatus("Record added.");
@@ -199,36 +209,65 @@ export default async function handler(req, res) {
     setStatus("Deleted record #" + id);
   }
 
+  function parseServerPlacementOptions() {
+    const out = {};
+    const raw = SERVER_PARAMS.PLACEMENT_OPTIONS;
+    if (!raw) return out;
+    try { return JSON.parse(raw); } catch (_) { return out; }
+  }
+
   async function resolveContext() {
-    return new Promise((resolve) => {
-      BX24.placement.info(async (p) => {
-        placement = p && p.placement ? p.placement : "";
-        const options = (p && p.options) || {};
-        const id = options.ID || options.id;
+    // Primary: server params fallback (most reliable for embedded POST apps)
+    const serverOpts = parseServerPlacementOptions();
+    const serverPlacement = SERVER_PARAMS.PLACEMENT || "";
+    const serverId = serverOpts.ID || serverOpts.id || SERVER_PARAMS.ID || null;
 
-        if (!id) return resolve({ error: "No record ID in placement." });
+    // Try SDK placement.info safely with timeout
+    let sdkPlacement = "";
+    let sdkOpts = {};
+    try {
+      const maybeObj = (BX24.placement && typeof BX24.placement.info === "function")
+        ? BX24.placement.info()
+        : null;
 
-        try {
-          if (placement === "CRM_CONTACT_DETAIL_TAB") {
-            contactId = id;
-            const c = await call("crm.contact.get", { id: contactId });
-            companyId = c.COMPANY_ID || null;
-            if (!companyId) return resolve({ error: "Contact has no linked company. Link company first." });
-            return resolve({});
-          }
+      if (maybeObj && typeof maybeObj === "object") {
+        sdkPlacement = maybeObj.placement || "";
+        sdkOpts = maybeObj.options || {};
+      } else if (BX24.placement && typeof BX24.placement.info === "function") {
+        const info = await Promise.race([
+          new Promise((resolve) => BX24.placement.info((p) => resolve(p || {}))),
+          new Promise((resolve) => setTimeout(() => resolve({}), 800))
+        ]);
+        sdkPlacement = info.placement || "";
+        sdkOpts = info.options || {};
+      }
+    } catch (_) {}
 
-          companyId = id;
-          return resolve({});
-        } catch (e) {
-          return resolve({ error: String(e) });
-        }
-      });
-    });
+    const placement = sdkPlacement || serverPlacement || "";
+    const options = Object.keys(sdkOpts).length ? sdkOpts : serverOpts;
+    const id = options.ID || options.id || serverId;
+
+    if (!id) return { error: "No record ID in placement." };
+
+    if (placement === "CRM_CONTACT_DETAIL_TAB") {
+      // not used in your current setup, but safe fallback
+      try {
+        const c = await call("crm.contact.get", { id });
+        companyId = c.COMPANY_ID || null;
+        if (!companyId) return { error: "Contact has no linked company." };
+      } catch (e) {
+        return { error: String(e) };
+      }
+    } else {
+      companyId = id;
+    }
+
+    return {};
   }
 
   function bindEvents() {
     document.getElementById("addBtn").onclick = async () => {
-      try { await addRow(); } catch(e) { setStatus("Add error: " + e); }
+      try { await addRow(); } catch (e) { setStatus("Add error: " + e); }
     };
 
     document.getElementById("reloadBtn").onclick = async () => {
@@ -236,7 +275,9 @@ export default async function handler(req, res) {
         const items = await listItems();
         renderRows(items);
         setStatus("Reloaded.");
-      } catch(e) { setStatus("Reload error: " + e); }
+      } catch (e) {
+        setStatus("Reload error: " + e);
+      }
     };
 
     bodyRows.onclick = async (ev) => {
