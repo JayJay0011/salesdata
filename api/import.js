@@ -25,6 +25,7 @@ export default async function handler(req, res) {
   const SALES_GROUP_FIELD = "UF_CRM_1737151067313";
   const PF_ID_FIELD = "UF_CRM_1737150815389";
   const DB_DIR_FIELD = "UF_CRM_1737893463724";
+  const TENDER_NUMBER_FIELD = "UF_CRM_1772619295";
 
   const CHART1_MAP = {
     "Arts and Crafts – YTD Sales": "UF_CRM_1770346519029",
@@ -181,9 +182,51 @@ export default async function handler(req, res) {
     "MD57": "UF_CRM_1771797165",
   };
 
-  const map = type === "chart1" ? CHART1_MAP : type === "chart2" ? CHART2_MAP : MAILING_MAP;
-  const keyHeader = type === "chart1" ? "Sales Group ID" : type === "chart2" ? "PF ID" : "Database Directory";
-  const keyField = type === "chart1" ? SALES_GROUP_FIELD : type === "chart2" ? PF_ID_FIELD : DB_DIR_FIELD;
+  const TENDERS_MAP = {
+  "Tender #": "UF_CRM_1772619295",
+  "Reminder Date": "UF_CRM_1772619390",
+  "Active Date": "UF_CRM_1772619441",
+  "Expiry Date": "UF_CRM_1772619541",
+  "Currently Active?": "UF_CRM_1772619606",
+  "Results": "UF_CRM_1772619752",
+  "Comment from Tenders Department": "UF_CRM_1772619871",
+  "Art Category": "UF_CRM_1772619911",
+  "Elementary Math": "UF_CRM_1772620002",
+  "Early Years": "UF_CRM_1772620138",
+  "Healthcare": "UF_CRM_1772620361",
+  "Literacy": "UF_CRM_1772620404",
+  "Physical Education": "UF_CRM_1772620438",
+  "Science": "UF_CRM_1772620474",
+  "Special Education": "UF_CRM_1772620514",
+  "Technology": "UF_CRM_1772620555",
+  "SI Manfuacturing": "UF_CRM_1772620595",
+  "Eligible for Ext?": "UF_CRM_1772620645",
+  "Tender Platform": "UF_CRM_1772620840",
+  "Value of Total Tender": "UF_CRM_1772620969",
+  "Awarded Value": "UF_CRM_1772621229",
+  "Estimated Margin": "UF_CRM_1772621468",
+  "Tender Contact": "UF_CRM_1772621537"
+};
+
+
+  const map =
+  type === "chart1" ? CHART1_MAP :
+  type === "chart2" ? CHART2_MAP :
+  type === "mailing" ? MAILING_MAP :
+  TENDERS_MAP;
+
+const keyHeader =
+  type === "chart1" ? "Sales Group ID" :
+  type === "chart2" ? "PF ID" :
+  type === "mailing" ? "Database Directory" :
+  "Tender #";
+
+const keyField =
+  type === "chart1" ? SALES_GROUP_FIELD :
+  type === "chart2" ? PF_ID_FIELD :
+  type === "mailing" ? DB_DIR_FIELD :
+  TENDER_NUMBER_FIELD;
+
 
   const cleanNumber = (v) => {
     if (v === null || v === undefined) return "";
@@ -258,7 +301,7 @@ export default async function handler(req, res) {
       const fields = {};
       Object.keys(map).forEach(h => {
         const v = row[normalize(h)];
-       if (type === "mailing") {
+if (type === "mailing") {
   const isCheckbox = h.startsWith("MD") && parseInt(h.slice(2), 10) >= 6 && parseInt(h.slice(2), 10) <= 55;
   if (isCheckbox) {
     const vv = String(v || "").trim().toLowerCase();
@@ -266,9 +309,13 @@ export default async function handler(req, res) {
   } else {
     fields[map[h]] = v;
   }
+} else if (type === "tenders") {
+  // Keep tender values as entered (dates, money, number, list, bind)
+  fields[map[h]] = v;
 } else {
   fields[map[h]] = cleanNumber(v);
 }
+
       });
 
       for (const id of ids) {
