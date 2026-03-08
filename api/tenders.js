@@ -60,30 +60,31 @@ export default async function handler(req, res) {
   const COMPANY_LINK_FIELD = "UF_CRM_14_1772985410";
   const MIN_ROWS = 10;
 
+  // Hardcoded UI types/options for stability
   const FIELDS = [
-    { code: "UF_CRM_14_1772974250", label: "Tender #" },
-    { code: "UF_CRM_14_1772975158", label: "Reminder Date" },
-    { code: "UF_CRM_14_1772975701", label: "Active Date" },
-    { code: "UF_CRM_14_1772976479", label: "Expiry Date" },
-    { code: "UF_CRM_14_1772976511", label: "Currently Active?" },
-    { code: "UF_CRM_14_1772976533", label: "Results" },
-    { code: "UF_CRM_14_1772976696", label: "Comment from Tenders Department" },
-    { code: "UF_CRM_14_1772976870", label: "Art Category" },
-    { code: "UF_CRM_14_1772978571", label: "Elementary Math" },
-    { code: "UF_CRM_14_1772979400", label: "Early Years" },
-    { code: "UF_CRM_14_1772980445", label: "Healthcare" },
-    { code: "UF_CRM_14_1772980703", label: "Literacy" },
-    { code: "UF_CRM_14_1772980862", label: "Physical Education" },
-    { code: "UF_CRM_14_1772981401", label: "Science" },
-    { code: "UF_CRM_14_1772981424", label: "Special Education" },
-    { code: "UF_CRM_14_1772981945", label: "Technology" },
-    { code: "UF_CRM_14_1772982139", label: "SI Manufacturing" },
-    { code: "UF_CRM_14_1772982287", label: "Eligible for Ext?" },
-    { code: "UF_CRM_14_1772982484", label: "Tender Platform" },
-    { code: "UF_CRM_14_1772982539", label: "Value of Total Tender" },
-    { code: "UF_CRM_14_1772982627", label: "Awarded Value" },
-    { code: "UF_CRM_14_1772982653", label: "Estimated Margin" },
-    { code: "UF_CRM_14_1772982708", label: "Tender Contact" }
+    { code: "UF_CRM_14_1772974250", label: "Tender #", ui: "text" },
+    { code: "UF_CRM_14_1772975158", label: "Reminder Date", ui: "date" },
+    { code: "UF_CRM_14_1772975701", label: "Active Date", ui: "date" },
+    { code: "UF_CRM_14_1772976479", label: "Expiry Date", ui: "date" },
+    { code: "UF_CRM_14_1772976511", label: "Currently Active?", ui: "boolean" },
+    { code: "UF_CRM_14_1772976533", label: "Results", ui: "select", options: ["", "Won", "Lost", "Pending"] },
+    { code: "UF_CRM_14_1772976696", label: "Comment from Tenders Department", ui: "textarea" },
+    { code: "UF_CRM_14_1772976870", label: "Art Category", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
+    { code: "UF_CRM_14_1772978571", label: "Elementary Math", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
+    { code: "UF_CRM_14_1772979400", label: "Early Years", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
+    { code: "UF_CRM_14_1772980445", label: "Healthcare", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
+    { code: "UF_CRM_14_1772980703", label: "Literacy", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
+    { code: "UF_CRM_14_1772980862", label: "Physical Education", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
+    { code: "UF_CRM_14_1772981401", label: "Science", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
+    { code: "UF_CRM_14_1772981424", label: "Special Education", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
+    { code: "UF_CRM_14_1772981945", label: "Technology", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
+    { code: "UF_CRM_14_1772982139", label: "SI Manufacturing", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
+    { code: "UF_CRM_14_1772982287", label: "Eligible for Ext?", ui: "boolean" },
+    { code: "UF_CRM_14_1772982484", label: "Tender Platform", ui: "text" },
+    { code: "UF_CRM_14_1772982539", label: "Value of Total Tender", ui: "money" },
+    { code: "UF_CRM_14_1772982627", label: "Awarded Value", ui: "money" },
+    { code: "UF_CRM_14_1772982653", label: "Estimated Margin", ui: "number" },
+    { code: "UF_CRM_14_1772982708", label: "Tender Contact", ui: "text" }
   ];
 
   const statusEl = document.getElementById("status");
@@ -91,7 +92,6 @@ export default async function handler(req, res) {
   const bodyRows = document.getElementById("bodyRows");
 
   let companyId = "";
-  let fieldMeta = {};
   let rowsData = [];
 
   function setStatus(msg) { statusEl.textContent = msg; }
@@ -119,32 +119,14 @@ export default async function handler(req, res) {
     return String(v).slice(0, 10);
   }
 
-  function metaOf(code) {
-    return fieldMeta[String(code).toUpperCase()] || {};
-  }
-
-  function typeOf(code) {
-    return String(metaOf(code).type || "").toLowerCase();
-  }
-
-  function isEnum(code) {
-    return Array.isArray(metaOf(code).items);
-  }
-
-  function isBoolean(code) {
-    const t = typeOf(code);
-    return t.includes("bool") || t.includes("true");
-  }
-
-  function inputHtml(code, value) {
-    const t = typeOf(code);
+  function inputHtml(field, value) {
     const v = value == null ? "" : value;
 
-    if (t === "date") {
+    if (field.ui === "date") {
       return '<input type="date" value="' + esc(normalizeDate(v)) + '">';
     }
 
-    if (isBoolean(code)) {
+    if (field.ui === "boolean") {
       const vv = String(v).toLowerCase();
       const yes = vv === "1" || vv === "y" || vv === "yes" || vv === "true";
       const no = vv === "0" || vv === "n" || vv === "no" || vv === "false";
@@ -155,20 +137,15 @@ export default async function handler(req, res) {
       '</select>';
     }
 
-    if (isEnum(code)) {
-      const items = metaOf(code).items || [];
-      const opts = ['<option value=""></option>'].concat(
-        items.map(i => {
-          const idVal = String(i.ID ?? "");
-          const txtVal = String(i.VALUE ?? "");
-          const sel = (String(v) === idVal || String(v) === txtVal) ? " selected" : "";
-          return '<option value="' + esc(idVal) + '"' + sel + '>' + esc(txtVal) + '</option>';
-        })
-      ).join("");
+    if (field.ui === "select") {
+      const opts = (field.options || []).map(o => {
+        const sel = String(v) === String(o) ? " selected" : "";
+        return '<option value="' + esc(o) + '"' + sel + '>' + esc(o) + '</option>';
+      }).join("");
       return '<select>' + opts + '</select>';
     }
 
-    if (t === "text") {
+    if (field.ui === "textarea") {
       return '<textarea>' + esc(v) + '</textarea>';
     }
 
@@ -203,7 +180,7 @@ export default async function handler(req, res) {
       FIELDS.forEach(f => {
         const td = document.createElement("td");
         td.dataset.field = f.code;
-        td.innerHTML = inputHtml(f.code, r.values[f.code] || "");
+        td.innerHTML = inputHtml(f, r.values[f.code] || "");
         tr.appendChild(td);
       });
 
@@ -235,24 +212,27 @@ export default async function handler(req, res) {
     return String(id);
   }
 
-  async function loadFieldMeta() {
-    const meta = await call("crm.item.fields", { entityTypeId: ENTITY_TYPE_ID });
-    const raw = meta || {};
-    fieldMeta = {};
-    Object.keys(raw).forEach(k => {
-      fieldMeta[String(k).toUpperCase()] = raw[k];
-    });
+  function linkMatches(itemVal, currentCompanyId) {
+    if (itemVal == null) return false;
+    const target = String(currentCompanyId);
+
+    if (Array.isArray(itemVal)) return itemVal.map(String).includes(target);
+
+    if (typeof itemVal === "object") {
+      if (itemVal.ID != null) return String(itemVal.ID) === target;
+      if (itemVal.VALUE != null) return String(itemVal.VALUE) === target;
+      return Object.values(itemVal).map(String).includes(target);
+    }
+
+    return String(itemVal) === target;
   }
 
   async function loadRecords() {
     const select = ["id", "title", COMPANY_LINK_FIELD].concat(FIELDS.map(f => f.code));
-    const data = await call("crm.item.list", {
-      entityTypeId: ENTITY_TYPE_ID,
-      select
-    });
+    const data = await call("crm.item.list", { entityTypeId: ENTITY_TYPE_ID, select });
 
     const allItems = Array.isArray(data && data.items) ? data.items : (Array.isArray(data) ? data : []);
-    const items = allItems.filter(it => String(it[COMPANY_LINK_FIELD] || "") === String(companyId));
+    const items = allItems.filter(it => linkMatches(it[COMPANY_LINK_FIELD], companyId));
 
     rowsData = items.map(it => {
       const v = {};
@@ -309,7 +289,7 @@ export default async function handler(req, res) {
       }
 
       const fields = { ...row.values };
-      fields[COMPANY_LINK_FIELD] = companyId;
+      fields[COMPANY_LINK_FIELD] = String(companyId);
       fields.title = tenderTitle(row.values);
 
       if (row.id) {
@@ -377,7 +357,6 @@ export default async function handler(req, res) {
     try {
       if (!ENTITY_TYPE_ID) throw new Error("Missing TENDER_ENTITY_TYPE_ID env var.");
       companyId = await resolveCompanyId();
-      await loadFieldMeta();
       await loadRecords();
       renderHeader();
       renderRows();
