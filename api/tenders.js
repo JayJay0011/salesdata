@@ -27,12 +27,11 @@ export default async function handler(req, res) {
     table { border-collapse: collapse; width: 100%; min-width: 2400px; }
     th, td { border:1px solid #e3e6eb; padding:6px 8px; font-size:13px; vertical-align: top; }
     th { background:#0c5b80; color:#fff; text-align:left; white-space:nowrap; }
-    td input, td select, td textarea {
-      width:100%; box-sizing:border-box; border:1px solid #d7dbe2; border-radius:4px; padding:6px 8px; font-size:13px;
-    }
+    td input, td select, td textarea { width:100%; box-sizing:border-box; border:1px solid #d7dbe2; border-radius:4px; padding:6px 8px; font-size:13px; }
     td textarea { min-height:34px; resize:vertical; }
-    .actions-col { width:130px; white-space:nowrap; }
+    .actions-col { width:140px; white-space:nowrap; }
     .row-actions { display:flex; gap:6px; }
+    .new-row { background:#fbfdff; }
   </style>
 </head>
 <body>
@@ -43,6 +42,7 @@ export default async function handler(req, res) {
     <div class="toolbar">
       <button class="btn" id="addBtn">Add Record</button>
       <button class="btn gray" id="reloadBtn">Reload</button>
+      <button class="btn gray" id="exportBtn">Export CSV</button>
     </div>
 
     <div class="table-wrap">
@@ -57,6 +57,9 @@ export default async function handler(req, res) {
 (() => {
   const ENTITY_TYPE_ID = Number("${entityTypeId}");
   const SERVER_PARAMS = ${JSON.stringify(params)};
+
+  // REPLACE this with your new SPA field code for "Company Link ID"
+  const COMPANY_LINK_FIELD = "UF_CRM_14_REPLACE_ME";
 
   const FIELDS = [
     { code: "UF_CRM_14_1772974250", label: "Tender #" },
@@ -90,6 +93,7 @@ export default async function handler(req, res) {
 
   let fieldMeta = {};
   let companyId = null;
+  let records = [];
 
   function setStatus(t) { statusEl.textContent = t; }
 
@@ -102,47 +106,34 @@ export default async function handler(req, res) {
     });
   }
 
-  function escapeHtml(s) {
-    return String(s == null ? "" : s)
-      .replace(/&/g,"&amp;")
-      .replace(/</g,"&lt;")
-      .replace(/>/g,"&gt;")
-      .replace(/"/g,"&quot;");
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 
-  function createInput(meta, value) {
-    const type = String((meta && meta.type) || "").toLowerCase();
+  function inputHtml(code, value) {
+    const type = String((fieldMeta[code] && fieldMeta[code].type) || "").toLowerCase();
     const v = value == null ? "" : value;
 
-    if (type === "date") {
-      const d = String(v).slice(0, 10);
-      return '<input type="date" value="' + escapeHtml(d) + '">';
-    }
-
+    if (type === "date") return '<input type="date" value="' + esc(String(v).slice(0,10)) + '">';
     if (type === "boolean") {
-      const yes = String(v) === "Y" || String(v) === "1" || String(v).toLowerCase() === "yes";
-      return '<select><option value=""></option><option value="Y"' + (yes ? " selected" : "") + '>Yes</option><option value="N"' + (!yes && v !== "" ? " selected" : "") + '>No</option></select>';
+      const y = String(v) === "Y" || String(v).toLowerCase() === "yes" || String(v) === "1";
+      return '<select><option value=""></option><option value="Y"' + (y ? " selected" : "") + '>Yes</option><option value="N"' + (!y && v !== "" ? " selected" : "") + '>No</option></select>';
     }
-
-    if (type === "enumeration" && Array.isArray(meta.items)) {
-      const opts = ['<option value=""></option>'].concat(
-        meta.items.map(i => {
-          const selected = String(v) === String(i.VALUE) ? " selected" : "";
-          return '<option value="' + escapeHtml(i.VALUE) + '"' + selected + '>' + escapeHtml(i.VALUE) + '</option>';
-        })
-      ).join("");
+    if (type === "enumeration" && Array.isArray(fieldMeta[code].items)) {
+      const opts = ['<option value=""></option>'].concat(fieldMeta[code].items.map(i => {
+        const sel = String(v) === String(i.VALUE) ? " selected" : "";
+        return '<option value="' + esc(i.VALUE) + '"' + sel + '>' + esc(i.VALUE) + '</option>';
+      })).join("");
       return '<select>' + opts + '</select>';
     }
-
-    if (type === "text") {
-      return '<textarea>' + escapeHtml(v) + '</textarea>';
-    }
-
-    return '<input type="text" value="' + escapeHtml(v) + '">';
+    if (type === "text") return '<textarea>' + esc(v) + '</textarea>';
+    return '<input type="text" value="' + esc(v) + '">';
   }
 
-  function renderHeader() {
+  function render() {
     headRow.innerHTML = "";
+    bodyRows.innerHTML = "";
+
     const thA = document.createElement("th");
     thA.className = "actions-col";
     thA.textContent = "Actions";
@@ -153,27 +144,26 @@ export default async function handler(req, res) {
       th.textContent = f.label;
       headRow.appendChild(th);
     });
-  }
 
-  function renderRows(items) {
-    bodyRows.innerHTML = "";
-
-    items.forEach(item => {
+    // Better UX: always show at least 1 row
+    const rows = records.length ? records : [{ id: "", __new: true }];
+    rows.forEach(r => {
       const tr = document.createElement("tr");
-      tr.dataset.id = item.id;
+      tr.dataset.id = r.id || "";
+      if (r.__new) tr.classList.add("new-row");
 
       const tdA = document.createElement("td");
       tdA.className = "actions-col";
       tdA.innerHTML = '<div class="row-actions">' +
-        '<button class="btn" data-act="save">Save</button>' +
-        '<button class="btn red" data-act="del">Delete</button>' +
+        '<button class="btn" data-act="' + (r.__new ? "create" : "save") + '">' + (r.__new ? "Create" : "Save") + '</button>' +
+        (r.__new ? '<button class="btn red" data-act="remove-new">Remove</button>' : '<button class="btn red" data-act="del">Delete</button>') +
       '</div>';
       tr.appendChild(tdA);
 
       FIELDS.forEach(f => {
         const td = document.createElement("td");
         td.dataset.field = f.code;
-        td.innerHTML = createInput(fieldMeta[f.code] || {}, item[f.code]);
+        td.innerHTML = inputHtml(f.code, r[f.code] || "");
         tr.appendChild(td);
       });
 
@@ -181,121 +171,118 @@ export default async function handler(req, res) {
     });
   }
 
-  async function loadFieldsMeta() {
-    const meta = await call("crm.item.fields", { entityTypeId: ENTITY_TYPE_ID });
-    fieldMeta = meta || {};
+  function parsePlacement() {
+    let opts = {};
+    try { opts = SERVER_PARAMS.PLACEMENT_OPTIONS ? JSON.parse(SERVER_PARAMS.PLACEMENT_OPTIONS) : {}; } catch (_) {}
+    return {
+      placement: SERVER_PARAMS.PLACEMENT || "",
+      id: opts.ID || opts.id || SERVER_PARAMS.ID || ""
+    };
   }
 
-  async function listItems() {
-    const filter = { parentId4: companyId }; // company link
-    const select = ["id"].concat(FIELDS.map(f => f.code));
-    const data = await call("crm.item.list", { entityTypeId: ENTITY_TYPE_ID, filter, select });
-    if (data && Array.isArray(data.items)) return data.items;
-    if (Array.isArray(data)) return data;
-    return [];
+  async function resolveCompany() {
+    const ctx = parsePlacement();
+    if (!ctx.id) throw new Error("No record ID in placement.");
+    if (ctx.placement === "CRM_CONTACT_DETAIL_TAB") {
+      const c = await call("crm.contact.get", { id: ctx.id });
+      if (!c.COMPANY_ID) throw new Error("Contact has no linked company.");
+      return String(c.COMPANY_ID);
+    }
+    return String(ctx.id);
   }
 
-  function collectRow(tr) {
-    const out = {};
+  async function loadMeta() {
+    fieldMeta = await call("crm.item.fields", { entityTypeId: ENTITY_TYPE_ID }) || {};
+  }
+
+  async function loadRecords() {
+    const data = await call("crm.item.list", {
+      entityTypeId: ENTITY_TYPE_ID,
+      filter: { [COMPANY_LINK_FIELD]: companyId },
+      select: ["id"].concat(FIELDS.map(f => f.code)).concat([COMPANY_LINK_FIELD])
+    });
+    records = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []);
+  }
+
+  function readRow(tr) {
+    const fields = {};
     tr.querySelectorAll("td[data-field]").forEach(td => {
       const code = td.dataset.field;
       const el = td.querySelector("input,select,textarea");
-      if (!el) return;
-      let val = (el.value || "").trim();
-
-      const type = String((fieldMeta[code] && fieldMeta[code].type) || "").toLowerCase();
-      if (type === "boolean") {
-        if (val === "Y" || val === "yes" || val === "Yes") val = "Y";
-        else if (val === "N" || val === "no" || val === "No") val = "N";
-      }
-
-      out[code] = val;
+      fields[code] = (el && el.value ? el.value.trim() : "");
     });
-    return out;
+    fields[COMPANY_LINK_FIELD] = companyId;
+    return fields;
   }
 
-  async function addRow() {
-    await call("crm.item.add", {
-      entityTypeId: ENTITY_TYPE_ID,
-      fields: { parentId4: companyId }
-    });
-    const items = await listItems();
-    renderRows(items);
-    setStatus("Record added.");
+  async function createRow(tr) {
+    const fields = readRow(tr);
+    await call("crm.item.add", { entityTypeId: ENTITY_TYPE_ID, fields });
+    await loadRecords();
+    render();
+    setStatus("Record created.");
   }
 
   async function saveRow(tr) {
     const id = tr.dataset.id;
-    const fields = collectRow(tr);
+    const fields = readRow(tr);
     await call("crm.item.update", { entityTypeId: ENTITY_TYPE_ID, id, fields });
-    setStatus("Saved record #" + id);
+    setStatus("Saved.");
   }
 
   async function deleteRow(tr) {
     const id = tr.dataset.id;
     await call("crm.item.delete", { entityTypeId: ENTITY_TYPE_ID, id });
     tr.remove();
-    setStatus("Deleted record #" + id);
-  }
-
-  function parseServerPlacementOptions() {
-    const raw = SERVER_PARAMS.PLACEMENT_OPTIONS;
-    if (!raw) return {};
-    try { return JSON.parse(raw); } catch (_) { return {}; }
-  }
-
-  async function resolveContext() {
-    const pOpts = parseServerPlacementOptions();
-    const pPlacement = SERVER_PARAMS.PLACEMENT || "";
-    const pId = pOpts.ID || pOpts.id || SERVER_PARAMS.ID || null;
-
-    let sdkPlacement = "";
-    let sdkOpts = {};
-    try {
-      if (BX24.placement && typeof BX24.placement.info === "function") {
-        const r = BX24.placement.info();
-        if (r && typeof r === "object") {
-          sdkPlacement = r.placement || "";
-          sdkOpts = r.options || {};
-        }
-      }
-    } catch (_) {}
-
-    const placement = sdkPlacement || pPlacement || "";
-    const options = Object.keys(sdkOpts).length ? sdkOpts : pOpts;
-    const id = options.ID || options.id || pId;
-
-    if (!id) return { error: "No record ID in placement." };
-
-    if (placement === "CRM_CONTACT_DETAIL_TAB") {
-      try {
-        const c = await call("crm.contact.get", { id });
-        companyId = c.COMPANY_ID || null;
-        if (!companyId) return { error: "Contact has no linked company." };
-      } catch (e) {
-        return { error: String(e) };
-      }
-    } else {
-      companyId = id;
+    if (!bodyRows.children.length) {
+      records = [];
+      render();
     }
+    setStatus("Deleted.");
+  }
 
-    return {};
+  function addBlankRow() {
+    records.push({ id: "", __new: true });
+    render();
+  }
+
+  function exportCSV() {
+    const headers = FIELDS.map(f => f.label);
+    const csvRows = [headers];
+
+    const trs = bodyRows.querySelectorAll("tr");
+    trs.forEach(tr => {
+      const row = [];
+      FIELDS.forEach(f => {
+        const td = tr.querySelector('td[data-field="' + f.code + '"]');
+        const el = td ? td.querySelector("input,select,textarea") : null;
+        row.push(el ? (el.value || "") : "");
+      });
+      csvRows.push(row);
+    });
+
+    const escCsv = (v) => {
+      const s = String(v == null ? "" : v);
+      return /[",\\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+
+    const csv = csvRows.map(r => r.map(escCsv).join(",")).join("\\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "tenders.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   function bindEvents() {
-    document.getElementById("addBtn").onclick = async () => {
-      try { await addRow(); } catch (e) { setStatus("Add error: " + e); }
-    };
-
+    document.getElementById("addBtn").onclick = () => addBlankRow();
     document.getElementById("reloadBtn").onclick = async () => {
-      try {
-        const items = await listItems();
-        renderRows(items);
-        setStatus("Reloaded.");
-      } catch (e) {
-        setStatus("Reload error: " + e);
-      }
+      try { await loadRecords(); render(); setStatus("Reloaded."); }
+      catch (e) { setStatus("Reload error: " + e.message); }
     };
+    document.getElementById("exportBtn").onclick = exportCSV;
 
     bodyRows.onclick = async (ev) => {
       const btn = ev.target.closest("button[data-act]");
@@ -303,35 +290,31 @@ export default async function handler(req, res) {
       const tr = btn.closest("tr");
       const act = btn.getAttribute("data-act");
       try {
+        if (act === "create") await createRow(tr);
         if (act === "save") await saveRow(tr);
         if (act === "del") await deleteRow(tr);
+        if (act === "remove-new") { tr.remove(); if (!bodyRows.children.length) { records = []; render(); } }
       } catch (e) {
-        setStatus((act === "save" ? "Save" : "Delete") + " error: " + e);
+        setStatus((act || "Action") + " error: " + e.message);
       }
     };
   }
 
   BX24.init(async () => {
-    if (!ENTITY_TYPE_ID) {
-      setStatus("Missing TENDER_ENTITY_TYPE_ID env var.");
-      return;
-    }
-
-    const ctx = await resolveContext();
-    if (ctx.error) {
-      setStatus(ctx.error);
-      return;
-    }
-
     try {
-      await loadFieldsMeta();
-      renderHeader();
-      const items = await listItems();
-      renderRows(items);
+      if (!ENTITY_TYPE_ID) throw new Error("Missing TENDER_ENTITY_TYPE_ID env var.");
+      if (COMPANY_LINK_FIELD === "UF_CRM_14_1772985410") throw new Error("Set COMPANY_LINK_FIELD in tenders.js.");
+
+      companyId = await resolveCompany();
+      await loadMeta();
+      await loadRecords();
+      render();
       bindEvents();
       setStatus("Loaded.");
     } catch (e) {
-      setStatus("Load error: " + e);
+      render();
+      bindEvents();
+      setStatus("Load error: " + e.message);
     }
   });
 })();
@@ -342,4 +325,3 @@ export default async function handler(req, res) {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   return res.status(200).send(html);
 }
-
