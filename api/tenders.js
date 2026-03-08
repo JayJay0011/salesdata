@@ -92,7 +92,7 @@ export default async function handler(req, res) {
 
   let companyId = "";
   let fieldMeta = {};
-  let rowsData = []; // each: {id: "", values: {...}}
+  let rowsData = [];
 
   function setStatus(msg) { statusEl.textContent = msg; }
   function errText(e) { return String(e && e.message ? e.message : e); }
@@ -119,12 +119,16 @@ export default async function handler(req, res) {
     return String(v).slice(0, 10);
   }
 
+  function metaOf(code) {
+    return fieldMeta[String(code).toUpperCase()] || {};
+  }
+
   function typeOf(code) {
-    return String((fieldMeta[code] && fieldMeta[code].type) || "").toLowerCase();
+    return String(metaOf(code).type || "").toLowerCase();
   }
 
   function isEnum(code) {
-    return Array.isArray(fieldMeta[code] && fieldMeta[code].items);
+    return Array.isArray(metaOf(code).items);
   }
 
   function isBoolean(code) {
@@ -152,7 +156,7 @@ export default async function handler(req, res) {
     }
 
     if (isEnum(code)) {
-      const items = fieldMeta[code].items || [];
+      const items = metaOf(code).items || [];
       const opts = ['<option value=""></option>'].concat(
         items.map(i => {
           const idVal = String(i.ID ?? "");
@@ -233,18 +237,23 @@ export default async function handler(req, res) {
 
   async function loadFieldMeta() {
     const meta = await call("crm.item.fields", { entityTypeId: ENTITY_TYPE_ID });
-    fieldMeta = meta || {};
+    const raw = meta || {};
+    fieldMeta = {};
+    Object.keys(raw).forEach(k => {
+      fieldMeta[String(k).toUpperCase()] = raw[k];
+    });
   }
 
   async function loadRecords() {
     const select = ["id", "title", COMPANY_LINK_FIELD].concat(FIELDS.map(f => f.code));
     const data = await call("crm.item.list", {
       entityTypeId: ENTITY_TYPE_ID,
-      filter: { [COMPANY_LINK_FIELD]: companyId },
       select
     });
 
-    const items = Array.isArray(data && data.items) ? data.items : (Array.isArray(data) ? data : []);
+    const allItems = Array.isArray(data && data.items) ? data.items : (Array.isArray(data) ? data : []);
+    const items = allItems.filter(it => String(it[COMPANY_LINK_FIELD] || "") === String(companyId));
+
     rowsData = items.map(it => {
       const v = {};
       FIELDS.forEach(f => { v[f.code] = it[f.code] || ""; });
