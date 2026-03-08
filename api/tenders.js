@@ -18,20 +18,19 @@ export default async function handler(req, res) {
     .card { background:#fff; padding:14px; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,.06); }
     h3 { margin: 0 0 8px; }
     .muted { color:#666; font-size:12px; margin:6px 0 10px; }
-    .toolbar { display:flex; gap:8px; margin-bottom:10px; }
+    .toolbar { display:flex; gap:8px; margin-bottom:10px; flex-wrap: wrap; }
     .btn { background:#2f6ae5; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; }
     .btn.gray { background:#4b5563; }
-    .btn.red { background:#b42318; }
 
     .table-wrap { overflow:auto; border:1px solid #e3e6eb; border-radius:6px; }
-    table { border-collapse: collapse; width: 100%; min-width: 2400px; }
+    table { border-collapse: collapse; width: 100%; min-width: 2600px; }
     th, td { border:1px solid #e3e6eb; padding:6px 8px; font-size:13px; vertical-align: top; }
     th { background:#0c5b80; color:#fff; text-align:left; white-space:nowrap; }
-    td input, td select, td textarea { width:100%; box-sizing:border-box; border:1px solid #d7dbe2; border-radius:4px; padding:6px 8px; font-size:13px; }
+    td input, td select, td textarea {
+      width:100%; box-sizing:border-box; border:1px solid #d7dbe2; border-radius:4px; padding:6px 8px; font-size:13px; background:#fff;
+    }
     td textarea { min-height:34px; resize:vertical; }
-    .actions-col { width:140px; white-space:nowrap; }
-    .row-actions { display:flex; gap:6px; }
-    .new-row { background:#fbfdff; }
+    .rowno { width:64px; text-align:center; color:#444; }
   </style>
 </head>
 <body>
@@ -40,7 +39,8 @@ export default async function handler(req, res) {
     <div class="muted" id="status">Loading...</div>
 
     <div class="toolbar">
-      <button class="btn" id="addBtn">Add Record</button>
+      <button class="btn" id="saveAllBtn">Save All</button>
+      <button class="btn gray" id="addRowBtn">Add Record</button>
       <button class="btn gray" id="reloadBtn">Reload</button>
       <button class="btn gray" id="exportBtn">Export CSV</button>
     </div>
@@ -57,9 +57,8 @@ export default async function handler(req, res) {
 (() => {
   const ENTITY_TYPE_ID = Number("${entityTypeId}");
   const SERVER_PARAMS = ${JSON.stringify(params)};
-
-  // REPLACE this with your new SPA field code for "Company Link ID"
-  const COMPANY_LINK_FIELD = "UF_CRM_14_REPLACE_ME";
+  const COMPANY_LINK_FIELD = "UF_CRM_14_1772985410";
+  const MIN_ROWS = 10;
 
   const FIELDS = [
     { code: "UF_CRM_14_1772974250", label: "Tender #" },
@@ -91,79 +90,116 @@ export default async function handler(req, res) {
   const headRow = document.getElementById("headRow");
   const bodyRows = document.getElementById("bodyRows");
 
+  let companyId = "";
   let fieldMeta = {};
-  let companyId = null;
-  let records = [];
+  let rowsData = []; // each: {id: "", values: {...}}
 
-  function setStatus(t) { statusEl.textContent = t; }
+  function setStatus(msg) { statusEl.textContent = msg; }
+  function errText(e) { return String(e && e.message ? e.message : e); }
 
   function call(method, params = {}) {
     return new Promise((resolve, reject) => {
       BX24.callMethod(method, params, (res) => {
-        if (res.error()) return reject(res.error() + (res.error_description ? " - " + res.error_description : ""));
+        if (res.error()) return reject((res.error() || "Error") + (res.error_description ? " - " + res.error_description : ""));
         resolve(res.data());
       });
     });
   }
 
   function esc(s) {
-    return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function normalizeDate(v) {
+    if (!v) return "";
+    return String(v).slice(0, 10);
+  }
+
+  function typeOf(code) {
+    return String((fieldMeta[code] && fieldMeta[code].type) || "").toLowerCase();
+  }
+
+  function isEnum(code) {
+    return Array.isArray(fieldMeta[code] && fieldMeta[code].items);
+  }
+
+  function isBoolean(code) {
+    const t = typeOf(code);
+    return t.includes("bool") || t.includes("true");
   }
 
   function inputHtml(code, value) {
-    const type = String((fieldMeta[code] && fieldMeta[code].type) || "").toLowerCase();
+    const t = typeOf(code);
     const v = value == null ? "" : value;
 
-    if (type === "date") return '<input type="date" value="' + esc(String(v).slice(0,10)) + '">';
-    if (type === "boolean") {
-      const y = String(v) === "Y" || String(v).toLowerCase() === "yes" || String(v) === "1";
-      return '<select><option value=""></option><option value="Y"' + (y ? " selected" : "") + '>Yes</option><option value="N"' + (!y && v !== "" ? " selected" : "") + '>No</option></select>';
+    if (t === "date") {
+      return '<input type="date" value="' + esc(normalizeDate(v)) + '">';
     }
-    if (type === "enumeration" && Array.isArray(fieldMeta[code].items)) {
-      const opts = ['<option value=""></option>'].concat(fieldMeta[code].items.map(i => {
-        const sel = String(v) === String(i.VALUE) ? " selected" : "";
-        return '<option value="' + esc(i.VALUE) + '"' + sel + '>' + esc(i.VALUE) + '</option>';
-      })).join("");
+
+    if (isBoolean(code)) {
+      const vv = String(v).toLowerCase();
+      const yes = vv === "1" || vv === "y" || vv === "yes" || vv === "true";
+      const no = vv === "0" || vv === "n" || vv === "no" || vv === "false";
+      return '<select>' +
+        '<option value=""></option>' +
+        '<option value="1"' + (yes ? " selected" : "") + '>Yes</option>' +
+        '<option value="0"' + (no ? " selected" : "") + '>No</option>' +
+      '</select>';
+    }
+
+    if (isEnum(code)) {
+      const items = fieldMeta[code].items || [];
+      const opts = ['<option value=""></option>'].concat(
+        items.map(i => {
+          const idVal = String(i.ID ?? "");
+          const txtVal = String(i.VALUE ?? "");
+          const sel = (String(v) === idVal || String(v) === txtVal) ? " selected" : "";
+          return '<option value="' + esc(idVal) + '"' + sel + '>' + esc(txtVal) + '</option>';
+        })
+      ).join("");
       return '<select>' + opts + '</select>';
     }
-    if (type === "text") return '<textarea>' + esc(v) + '</textarea>';
+
+    if (t === "text") {
+      return '<textarea>' + esc(v) + '</textarea>';
+    }
+
     return '<input type="text" value="' + esc(v) + '">';
   }
 
-  function render() {
+  function renderHeader() {
     headRow.innerHTML = "";
-    bodyRows.innerHTML = "";
-
-    const thA = document.createElement("th");
-    thA.className = "actions-col";
-    thA.textContent = "Actions";
-    headRow.appendChild(thA);
+    const thNo = document.createElement("th");
+    thNo.className = "rowno";
+    thNo.textContent = "#";
+    headRow.appendChild(thNo);
 
     FIELDS.forEach(f => {
       const th = document.createElement("th");
       th.textContent = f.label;
       headRow.appendChild(th);
     });
+  }
 
-    // Better UX: always show at least 1 row
-    const rows = records.length ? records : [{ id: "", __new: true }];
-    rows.forEach(r => {
+  function renderRows() {
+    bodyRows.innerHTML = "";
+    rowsData.forEach((r, idx) => {
       const tr = document.createElement("tr");
       tr.dataset.id = r.id || "";
-      if (r.__new) tr.classList.add("new-row");
 
-      const tdA = document.createElement("td");
-      tdA.className = "actions-col";
-      tdA.innerHTML = '<div class="row-actions">' +
-        '<button class="btn" data-act="' + (r.__new ? "create" : "save") + '">' + (r.__new ? "Create" : "Save") + '</button>' +
-        (r.__new ? '<button class="btn red" data-act="remove-new">Remove</button>' : '<button class="btn red" data-act="del">Delete</button>') +
-      '</div>';
-      tr.appendChild(tdA);
+      const tdNo = document.createElement("td");
+      tdNo.className = "rowno";
+      tdNo.textContent = String(idx + 1);
+      tr.appendChild(tdNo);
 
       FIELDS.forEach(f => {
         const td = document.createElement("td");
         td.dataset.field = f.code;
-        td.innerHTML = inputHtml(f.code, r[f.code] || "");
+        td.innerHTML = inputHtml(f.code, r.values[f.code] || "");
         tr.appendChild(td);
       });
 
@@ -171,102 +207,133 @@ export default async function handler(req, res) {
     });
   }
 
-  function parsePlacement() {
-    let opts = {};
-    try { opts = SERVER_PARAMS.PLACEMENT_OPTIONS ? JSON.parse(SERVER_PARAMS.PLACEMENT_OPTIONS) : {}; } catch (_) {}
-    return {
-      placement: SERVER_PARAMS.PLACEMENT || "",
-      id: opts.ID || opts.id || SERVER_PARAMS.ID || ""
-    };
+  function parsePlacementOptions() {
+    try {
+      return SERVER_PARAMS.PLACEMENT_OPTIONS ? JSON.parse(SERVER_PARAMS.PLACEMENT_OPTIONS) : {};
+    } catch (_) {
+      return {};
+    }
   }
 
-  async function resolveCompany() {
-    const ctx = parsePlacement();
-    if (!ctx.id) throw new Error("No record ID in placement.");
-    if (ctx.placement === "CRM_CONTACT_DETAIL_TAB") {
-      const c = await call("crm.contact.get", { id: ctx.id });
+  async function resolveCompanyId() {
+    const opts = parsePlacementOptions();
+    const placement = SERVER_PARAMS.PLACEMENT || "";
+    const id = opts.ID || opts.id || SERVER_PARAMS.ID || "";
+
+    if (!id) throw new Error("No record ID in placement.");
+
+    if (placement === "CRM_CONTACT_DETAIL_TAB") {
+      const c = await call("crm.contact.get", { id });
       if (!c.COMPANY_ID) throw new Error("Contact has no linked company.");
       return String(c.COMPANY_ID);
     }
-    return String(ctx.id);
+
+    return String(id);
   }
 
-  async function loadMeta() {
-    fieldMeta = await call("crm.item.fields", { entityTypeId: ENTITY_TYPE_ID }) || {};
+  async function loadFieldMeta() {
+    const meta = await call("crm.item.fields", { entityTypeId: ENTITY_TYPE_ID });
+    fieldMeta = meta || {};
   }
 
   async function loadRecords() {
+    const select = ["id", "title", COMPANY_LINK_FIELD].concat(FIELDS.map(f => f.code));
     const data = await call("crm.item.list", {
       entityTypeId: ENTITY_TYPE_ID,
       filter: { [COMPANY_LINK_FIELD]: companyId },
-      select: ["id"].concat(FIELDS.map(f => f.code)).concat([COMPANY_LINK_FIELD])
+      select
     });
-    records = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []);
-  }
 
-  function readRow(tr) {
-    const fields = {};
-    tr.querySelectorAll("td[data-field]").forEach(td => {
-      const code = td.dataset.field;
-      const el = td.querySelector("input,select,textarea");
-      fields[code] = (el && el.value ? el.value.trim() : "");
+    const items = Array.isArray(data && data.items) ? data.items : (Array.isArray(data) ? data : []);
+    rowsData = items.map(it => {
+      const v = {};
+      FIELDS.forEach(f => { v[f.code] = it[f.code] || ""; });
+      return { id: String(it.id || ""), values: v };
     });
-    fields[COMPANY_LINK_FIELD] = companyId;
-    return fields;
-  }
 
-  async function createRow(tr) {
-    const fields = readRow(tr);
-    await call("crm.item.add", { entityTypeId: ENTITY_TYPE_ID, fields });
-    await loadRecords();
-    render();
-    setStatus("Record created.");
-  }
-
-  async function saveRow(tr) {
-    const id = tr.dataset.id;
-    const fields = readRow(tr);
-    await call("crm.item.update", { entityTypeId: ENTITY_TYPE_ID, id, fields });
-    setStatus("Saved.");
-  }
-
-  async function deleteRow(tr) {
-    const id = tr.dataset.id;
-    await call("crm.item.delete", { entityTypeId: ENTITY_TYPE_ID, id });
-    tr.remove();
-    if (!bodyRows.children.length) {
-      records = [];
-      render();
+    while (rowsData.length < MIN_ROWS) {
+      const blank = {};
+      FIELDS.forEach(f => { blank[f.code] = ""; });
+      rowsData.push({ id: "", values: blank });
     }
-    setStatus("Deleted.");
   }
 
   function addBlankRow() {
-    records.push({ id: "", __new: true });
-    render();
+    const blank = {};
+    FIELDS.forEach(f => { blank[f.code] = ""; });
+    rowsData.push({ id: "", values: blank });
+    renderRows();
   }
 
-  function exportCSV() {
-    const headers = FIELDS.map(f => f.label);
-    const csvRows = [headers];
-
-    const trs = bodyRows.querySelectorAll("tr");
-    trs.forEach(tr => {
-      const row = [];
+  function readDomIntoRows() {
+    const trs = Array.from(bodyRows.querySelectorAll("tr"));
+    rowsData = trs.map(tr => {
+      const values = {};
       FIELDS.forEach(f => {
         const td = tr.querySelector('td[data-field="' + f.code + '"]');
         const el = td ? td.querySelector("input,select,textarea") : null;
-        row.push(el ? (el.value || "") : "");
+        values[f.code] = (el && el.value != null) ? String(el.value).trim() : "";
       });
-      csvRows.push(row);
+      return { id: tr.dataset.id || "", values };
+    });
+  }
+
+  function isRowEmpty(values) {
+    return FIELDS.every(f => !String(values[f.code] || "").trim());
+  }
+
+  function tenderTitle(values) {
+    return values["UF_CRM_14_1772974250"] || ("Tender " + new Date().toISOString());
+  }
+
+  async function saveAll() {
+    readDomIntoRows();
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const row of rowsData) {
+      if (isRowEmpty(row.values)) {
+        skipped++;
+        continue;
+      }
+
+      const fields = { ...row.values };
+      fields[COMPANY_LINK_FIELD] = companyId;
+      fields.title = tenderTitle(row.values);
+
+      if (row.id) {
+        await call("crm.item.update", { entityTypeId: ENTITY_TYPE_ID, id: row.id, fields });
+        updated++;
+      } else {
+        await call("crm.item.add", { entityTypeId: ENTITY_TYPE_ID, fields });
+        created++;
+      }
+    }
+
+    await loadRecords();
+    renderRows();
+    setStatus("Saved. Created=" + created + ", Updated=" + updated + ", Skipped empty=" + skipped);
+  }
+
+  function exportCSV() {
+    readDomIntoRows();
+
+    const headers = FIELDS.map(f => f.label);
+    const rows = [headers];
+
+    rowsData.forEach(r => {
+      if (isRowEmpty(r.values)) return;
+      rows.push(FIELDS.map(f => r.values[f.code] || ""));
     });
 
-    const escCsv = (v) => {
+    const csvEsc = (v) => {
       const s = String(v == null ? "" : v);
       return /[",\\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
 
-    const csv = csvRows.map(r => r.map(escCsv).join(",")).join("\\n");
+    const csv = rows.map(r => r.map(csvEsc).join(",")).join("\\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -277,25 +344,22 @@ export default async function handler(req, res) {
   }
 
   function bindEvents() {
-    document.getElementById("addBtn").onclick = () => addBlankRow();
+    document.getElementById("addRowBtn").onclick = addBlankRow;
     document.getElementById("reloadBtn").onclick = async () => {
-      try { await loadRecords(); render(); setStatus("Reloaded."); }
-      catch (e) { setStatus("Reload error: " + e.message); }
+      try {
+        await loadRecords();
+        renderRows();
+        setStatus("Reloaded.");
+      } catch (e) {
+        setStatus("Reload error: " + errText(e));
+      }
     };
     document.getElementById("exportBtn").onclick = exportCSV;
-
-    bodyRows.onclick = async (ev) => {
-      const btn = ev.target.closest("button[data-act]");
-      if (!btn) return;
-      const tr = btn.closest("tr");
-      const act = btn.getAttribute("data-act");
+    document.getElementById("saveAllBtn").onclick = async () => {
       try {
-        if (act === "create") await createRow(tr);
-        if (act === "save") await saveRow(tr);
-        if (act === "del") await deleteRow(tr);
-        if (act === "remove-new") { tr.remove(); if (!bodyRows.children.length) { records = []; render(); } }
+        await saveAll();
       } catch (e) {
-        setStatus((act || "Action") + " error: " + e.message);
+        setStatus("Save error: " + errText(e));
       }
     };
   }
@@ -303,18 +367,24 @@ export default async function handler(req, res) {
   BX24.init(async () => {
     try {
       if (!ENTITY_TYPE_ID) throw new Error("Missing TENDER_ENTITY_TYPE_ID env var.");
-      if (COMPANY_LINK_FIELD === "UF_CRM_14_1772985410") throw new Error("Set COMPANY_LINK_FIELD in tenders.js.");
-
-      companyId = await resolveCompany();
-      await loadMeta();
+      companyId = await resolveCompanyId();
+      await loadFieldMeta();
       await loadRecords();
-      render();
+      renderHeader();
+      renderRows();
       bindEvents();
       setStatus("Loaded.");
     } catch (e) {
-      render();
+      renderHeader();
+      rowsData = [];
+      while (rowsData.length < MIN_ROWS) {
+        const blank = {};
+        FIELDS.forEach(f => { blank[f.code] = ""; });
+        rowsData.push({ id: "", values: blank });
+      }
+      renderRows();
       bindEvents();
-      setStatus("Load error: " + e.message);
+      setStatus("Load error: " + errText(e));
     }
   });
 })();
