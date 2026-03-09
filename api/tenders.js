@@ -18,13 +18,13 @@ export default async function handler(req, res) {
     .card { background:#fff; padding:14px; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,.06); }
     h3 { margin: 0 0 8px; }
     .muted { color:#666; font-size:12px; margin:6px 0 10px; }
-    .toolbar { display:flex; gap:8px; margin-bottom:10px; flex-wrap: wrap; }
+    .toolbar { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
     .btn { background:#2f6ae5; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; }
     .btn.gray { background:#4b5563; }
 
     .table-wrap { overflow:auto; border:1px solid #e3e6eb; border-radius:6px; }
-    table { border-collapse: collapse; width: 100%; min-width: 2600px; }
-    th, td { border:1px solid #e3e6eb; padding:6px 8px; font-size:13px; vertical-align: top; }
+    table { border-collapse: collapse; width:100%; min-width:2600px; }
+    th, td { border:1px solid #e3e6eb; padding:6px 8px; font-size:13px; vertical-align:top; }
     th { background:#0c5b80; color:#fff; text-align:left; white-space:nowrap; }
     td input, td select, td textarea {
       width:100%; box-sizing:border-box; border:1px solid #d7dbe2; border-radius:4px; padding:6px 8px; font-size:13px; background:#fff;
@@ -60,31 +60,37 @@ export default async function handler(req, res) {
   const COMPANY_LINK_FIELD = "UF_CRM_14_1772985410";
   const MIN_ROWS = 10;
 
-  // Hardcoded UI types/options for stability
+  const RESULTS_OPTIONS = ["", "Won", "Lost", "Pending"];
+  const DISCOUNT_OPTIONS = ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"];
+
   const FIELDS = [
     { code: "UF_CRM_14_1772974250", label: "Tender #", ui: "text" },
     { code: "UF_CRM_14_1772975158", label: "Reminder Date", ui: "date" },
     { code: "UF_CRM_14_1772975701", label: "Active Date", ui: "date" },
     { code: "UF_CRM_14_1772976479", label: "Expiry Date", ui: "date" },
     { code: "UF_CRM_14_1772976511", label: "Currently Active?", ui: "boolean" },
-    { code: "UF_CRM_14_1772976533", label: "Results", ui: "select", options: ["", "Won", "Lost", "Pending"] },
+    { code: "UF_CRM_14_1772976533", label: "Results", ui: "select", options: RESULTS_OPTIONS },
     { code: "UF_CRM_14_1772976696", label: "Comment from Tenders Department", ui: "textarea" },
-    { code: "UF_CRM_14_1772976870", label: "Art Category", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
-    { code: "UF_CRM_14_1772978571", label: "Elementary Math", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
-    { code: "UF_CRM_14_1772979400", label: "Early Years", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
-    { code: "UF_CRM_14_1772980445", label: "Healthcare", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
-    { code: "UF_CRM_14_1772980703", label: "Literacy", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
-    { code: "UF_CRM_14_1772980862", label: "Physical Education", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
-    { code: "UF_CRM_14_1772981401", label: "Science", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
-    { code: "UF_CRM_14_1772981424", label: "Special Education", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
-    { code: "UF_CRM_14_1772981945", label: "Technology", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
-    { code: "UF_CRM_14_1772982139", label: "SI Manufacturing", ui: "select", options: ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"] },
+
+    { code: "UF_CRM_14_1772976870", label: "Art Category", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772978571", label: "Elementary Math", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772979400", label: "Early Years", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772980445", label: "Healthcare", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772980703", label: "Literacy", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772980862", label: "Physical Education", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772981401", label: "Science", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772981424", label: "Special Education", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772981945", label: "Technology", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772982139", label: "SI Manufacturing", ui: "select", options: DISCOUNT_OPTIONS },
+
     { code: "UF_CRM_14_1772982287", label: "Eligible for Ext?", ui: "boolean" },
     { code: "UF_CRM_14_1772982484", label: "Tender Platform", ui: "text" },
     { code: "UF_CRM_14_1772982539", label: "Value of Total Tender", ui: "money" },
     { code: "UF_CRM_14_1772982627", label: "Awarded Value", ui: "money" },
     { code: "UF_CRM_14_1772982653", label: "Estimated Margin", ui: "number" },
-    { code: "UF_CRM_14_1772982708", label: "Tender Contact", ui: "text" }
+
+    // currently bind-to-employee in your setup; keeping as ID input for now
+    { code: "UF_CRM_14_1772982708", label: "Tender Contact (ID)", ui: "text" }
   ];
 
   const statusEl = document.getElementById("status");
@@ -99,9 +105,9 @@ export default async function handler(req, res) {
 
   function call(method, params = {}) {
     return new Promise((resolve, reject) => {
-      BX24.callMethod(method, params, (res) => {
-        if (res.error()) return reject((res.error() || "Error") + (res.error_description ? " - " + res.error_description : ""));
-        resolve(res.data());
+      BX24.callMethod(method, params, (resObj) => {
+        if (resObj.error()) return reject((resObj.error() || "Error") + (resObj.error_description ? " - " + resObj.error_description : ""));
+        resolve(resObj.data());
       });
     });
   }
@@ -117,6 +123,10 @@ export default async function handler(req, res) {
   function normalizeDate(v) {
     if (!v) return "";
     return String(v).slice(0, 10);
+  }
+
+  function moneyInput(value) {
+    return '<input type="text" inputmode="decimal" placeholder="0.00 CAD" value="' + esc(value || "") + '">';
   }
 
   function inputHtml(field, value) {
@@ -147,6 +157,14 @@ export default async function handler(req, res) {
 
     if (field.ui === "textarea") {
       return '<textarea>' + esc(v) + '</textarea>';
+    }
+
+    if (field.ui === "money") {
+      return moneyInput(v);
+    }
+
+    if (field.ui === "number") {
+      return '<input type="text" inputmode="decimal" placeholder="0.00" value="' + esc(v) + '">';
     }
 
     return '<input type="text" value="' + esc(v) + '">';
@@ -254,6 +272,15 @@ export default async function handler(req, res) {
     renderRows();
   }
 
+  function sanitizeValue(field, raw) {
+    const v = String(raw || "").trim();
+
+    if (field.ui === "money" || field.ui === "number") {
+      return v.replace(/[$,]/g, "");
+    }
+    return v;
+  }
+
   function readDomIntoRows() {
     const trs = Array.from(bodyRows.querySelectorAll("tr"));
     rowsData = trs.map(tr => {
@@ -261,7 +288,7 @@ export default async function handler(req, res) {
       FIELDS.forEach(f => {
         const td = tr.querySelector('td[data-field="' + f.code + '"]');
         const el = td ? td.querySelector("input,select,textarea") : null;
-        values[f.code] = (el && el.value != null) ? String(el.value).trim() : "";
+        values[f.code] = sanitizeValue(f, el && el.value != null ? el.value : "");
       });
       return { id: tr.dataset.id || "", values };
     });
