@@ -60,38 +60,58 @@ export default async function handler(req, res) {
   const COMPANY_LINK_FIELD = "UF_CRM_14_1772985410";
   const MIN_ROWS = 10;
 
-  const RESULTS_OPTIONS = ["", "Won", "Lost", "Pending"];
-  const DISCOUNT_OPTIONS = ["", "No Discount", "3% Discount", "5% Discount", "7% Discount", "10% Discount", "Fixed & 3% Discount", "Fixed & 5% Discount", "Fixed & 7% Discount", "Fixed & 10% Discount"];
+  const RESULTS_OPTIONS = [
+  "",
+  "Being Prepared",
+  "Submitted",
+  "Fully Awarded",
+  "Partially Awarded",
+  "Unsucessful",
+  "Pending Renewal",
+  "On Hold"
+];
 
-  const FIELDS = [
-    { code: "UF_CRM_14_1772974250", label: "Tender #", ui: "text" },
-    { code: "UF_CRM_14_1772975158", label: "Reminder Date", ui: "date" },
-    { code: "UF_CRM_14_1772975701", label: "Active Date", ui: "date" },
-    { code: "UF_CRM_14_1772976479", label: "Expiry Date", ui: "date" },
-    { code: "UF_CRM_14_1772976511", label: "Currently Active?", ui: "boolean" },
-    { code: "UF_CRM_14_1772976533", label: "Results", ui: "select", options: RESULTS_OPTIONS },
-    { code: "UF_CRM_14_1772976696", label: "Comment from Tenders Department", ui: "textarea" },
+const DISCOUNT_OPTIONS = [
+  "",
+  "Fixed",
+  "3% Discount",
+  "5% Discount",
+  "7% Discount",
+  "10% Discount",
+  "Fixed & 3% Discount",
+  "Fixed & 5% Discount",
+  "Fixed & 7% Discount",
+  "Fixed & 10% Discount",
+  "No Discount"
+];
 
-    { code: "UF_CRM_14_1772976870", label: "Art Category", ui: "select", options: DISCOUNT_OPTIONS },
-    { code: "UF_CRM_14_1772978571", label: "Elementary Math", ui: "select", options: DISCOUNT_OPTIONS },
-    { code: "UF_CRM_14_1772979400", label: "Early Years", ui: "select", options: DISCOUNT_OPTIONS },
-    { code: "UF_CRM_14_1772980445", label: "Healthcare", ui: "select", options: DISCOUNT_OPTIONS },
-    { code: "UF_CRM_14_1772980703", label: "Literacy", ui: "select", options: DISCOUNT_OPTIONS },
-    { code: "UF_CRM_14_1772980862", label: "Physical Education", ui: "select", options: DISCOUNT_OPTIONS },
-    { code: "UF_CRM_14_1772981401", label: "Science", ui: "select", options: DISCOUNT_OPTIONS },
-    { code: "UF_CRM_14_1772981424", label: "Special Education", ui: "select", options: DISCOUNT_OPTIONS },
-    { code: "UF_CRM_14_1772981945", label: "Technology", ui: "select", options: DISCOUNT_OPTIONS },
-    { code: "UF_CRM_14_1772982139", label: "SI Manufacturing", ui: "select", options: DISCOUNT_OPTIONS },
+const FIELDS = [
+  { code: "UF_CRM_14_1772974250", label: "Tender #", ui: "text" },
+  { code: "UF_CRM_14_1772975158", label: "Reminder Date", ui: "date" },
+  { code: "UF_CRM_14_1772975701", label: "Active Date", ui: "date" },
+  { code: "UF_CRM_14_1772976479", label: "Expiry Date", ui: "date" },
+  { code: "UF_CRM_14_1772976511", label: "Currently Active?", ui: "boolean" },
+  { code: "UF_CRM_14_1772976533", label: "Results", ui: "select", options: RESULTS_OPTIONS },
+  { code: "UF_CRM_14_1772976696", label: "Comment from Tenders Department", ui: "textarea" },
 
-    { code: "UF_CRM_14_1772982287", label: "Eligible for Ext?", ui: "boolean" },
-    { code: "UF_CRM_14_1772982484", label: "Tender Platform", ui: "text" },
-    { code: "UF_CRM_14_1772982539", label: "Value of Total Tender", ui: "money" },
-    { code: "UF_CRM_14_1772982627", label: "Awarded Value", ui: "money" },
-    { code: "UF_CRM_14_1772982653", label: "Estimated Margin", ui: "number" },
+  { code: "UF_CRM_14_1772976870", label: "Art Category", ui: "select", options: DISCOUNT_OPTIONS },
+  { code: "UF_CRM_14_1772978571", label: "Elementary Math", ui: "select", options: DISCOUNT_OPTIONS },
+  { code: "UF_CRM_14_1772979400", label: "Early Years", ui: "select", options: DISCOUNT_OPTIONS },
+  { code: "UF_CRM_14_1772980445", label: "Healthcare", ui: "select", options: DISCOUNT_OPTIONS },
+  { code: "UF_CRM_14_1772980703", label: "Literacy", ui: "select", options: DISCOUNT_OPTIONS },
+  { code: "UF_CRM_14_1772980862", label: "Physical Education", ui: "select", options: DISCOUNT_OPTIONS },
+  { code: "UF_CRM_14_1772981401", label: "Science", ui: "select", options: DISCOUNT_OPTIONS },
+  { code: "UF_CRM_14_1772981424", label: "Special Education", ui: "select", options: DISCOUNT_OPTIONS },
+  { code: "UF_CRM_14_1772981945", label: "Technology", ui: "select", options: DISCOUNT_OPTIONS },
+  { code: "UF_CRM_14_1772982139", label: "SI Manufacturing", ui: "select", options: DISCOUNT_OPTIONS },
 
-    // currently bind-to-employee in your setup; keeping as ID input for now
-    { code: "UF_CRM_14_1772982708", label: "Tender Contact (ID)", ui: "text" }
-  ];
+  { code: "UF_CRM_14_1772982287", label: "Eligible for Ext?", ui: "boolean" },
+  { code: "UF_CRM_14_1772982484", label: "Tender Platform", ui: "text" },
+  { code: "UF_CRM_14_1772982539", label: "Value of Total Tender", ui: "money" },
+  { code: "UF_CRM_14_1772982627", label: "Awarded Value", ui: "money" },
+  { code: "UF_CRM_14_1772982653", label: "Estimated Margin", ui: "number" },
+  { code: "UF_CRM_14_1772982708", label: "Tender Contact", ui: "text" }
+];
 
   const statusEl = document.getElementById("status");
   const headRow = document.getElementById("headRow");
