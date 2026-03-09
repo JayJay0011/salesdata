@@ -23,14 +23,14 @@ export default async function handler(req, res) {
     .btn.gray { background:#4b5563; }
 
     .table-wrap { overflow:auto; border:1px solid #e3e6eb; border-radius:6px; }
-    table { border-collapse: collapse; width:100%; min-width:2600px; }
-    th, td { border:1px solid #e3e6eb; padding:6px 8px; font-size:13px; vertical-align:top; }
+    table { border-collapse: collapse; width:100%; min-width:2600px; table-layout: fixed; }
+    th, td { border:1px solid #e3e6eb; padding:6px 8px; font-size:13px; vertical-align:top; width:180px; }
     th { background:#0c5b80; color:#fff; text-align:left; white-space:nowrap; }
     td input, td select, td textarea {
       width:100%; box-sizing:border-box; border:1px solid #d7dbe2; border-radius:4px; padding:6px 8px; font-size:13px; background:#fff;
     }
     td textarea { min-height:34px; resize:vertical; }
-    .rowno { width:64px; text-align:center; color:#444; }
+    .rowno { width:64px !important; text-align:center; color:#444; }
   </style>
 </head>
 <body>
@@ -59,59 +59,60 @@ export default async function handler(req, res) {
   const SERVER_PARAMS = ${JSON.stringify(params)};
   const COMPANY_LINK_FIELD = "UF_CRM_14_1772985410";
   const MIN_ROWS = 10;
+  const AUTO_SAVE_DELAY = 800;
 
   const RESULTS_OPTIONS = [
-  "",
-  "Being Prepared",
-  "Submitted",
-  "Fully Awarded",
-  "Partially Awarded",
-  "Unsucessful",
-  "Pending Renewal",
-  "On Hold"
-];
+    "",
+    "Being Prepared",
+    "Submitted",
+    "Fully Awarded",
+    "Partially Awarded",
+    "Unsucessful",
+    "Pending Renewal",
+    "On Hold"
+  ];
 
-const DISCOUNT_OPTIONS = [
-  "",
-  "Fixed",
-  "3% Discount",
-  "5% Discount",
-  "7% Discount",
-  "10% Discount",
-  "Fixed & 3% Discount",
-  "Fixed & 5% Discount",
-  "Fixed & 7% Discount",
-  "Fixed & 10% Discount",
-  "No Discount"
-];
+  const DISCOUNT_OPTIONS = [
+    "",
+    "Fixed",
+    "3% Discount",
+    "5% Discount",
+    "7% Discount",
+    "10% Discount",
+    "Fixed & 3% Discount",
+    "Fixed & 5% Discount",
+    "Fixed & 7% Discount",
+    "Fixed & 10% Discount",
+    "No Discount"
+  ];
 
-const FIELDS = [
-  { code: "UF_CRM_14_1772974250", label: "Tender #", ui: "text" },
-  { code: "UF_CRM_14_1772975158", label: "Reminder Date", ui: "date" },
-  { code: "UF_CRM_14_1772975701", label: "Active Date", ui: "date" },
-  { code: "UF_CRM_14_1772976479", label: "Expiry Date", ui: "date" },
-  { code: "UF_CRM_14_1772976511", label: "Currently Active?", ui: "boolean" },
-  { code: "UF_CRM_14_1772976533", label: "Results", ui: "select", options: RESULTS_OPTIONS },
-  { code: "UF_CRM_14_1772976696", label: "Comment from Tenders Department", ui: "textarea" },
+  const FIELDS = [
+    { code: "UF_CRM_14_1772974250", label: "Tender #", ui: "text" },
+    { code: "UF_CRM_14_1772975158", label: "Reminder Date", ui: "date" },
+    { code: "UF_CRM_14_1772975701", label: "Active Date", ui: "date" },
+    { code: "UF_CRM_14_1772976479", label: "Expiry Date", ui: "date" },
+    { code: "UF_CRM_14_1772976511", label: "Currently Active?", ui: "boolean" },
+    { code: "UF_CRM_14_1772976533", label: "Results", ui: "select", options: RESULTS_OPTIONS },
+    { code: "UF_CRM_14_1772976696", label: "Comment from Tenders Department", ui: "textarea" },
 
-  { code: "UF_CRM_14_1772976870", label: "Art Category", ui: "select", options: DISCOUNT_OPTIONS },
-  { code: "UF_CRM_14_1772978571", label: "Elementary Math", ui: "select", options: DISCOUNT_OPTIONS },
-  { code: "UF_CRM_14_1772979400", label: "Early Years", ui: "select", options: DISCOUNT_OPTIONS },
-  { code: "UF_CRM_14_1772980445", label: "Healthcare", ui: "select", options: DISCOUNT_OPTIONS },
-  { code: "UF_CRM_14_1772980703", label: "Literacy", ui: "select", options: DISCOUNT_OPTIONS },
-  { code: "UF_CRM_14_1772980862", label: "Physical Education", ui: "select", options: DISCOUNT_OPTIONS },
-  { code: "UF_CRM_14_1772981401", label: "Science", ui: "select", options: DISCOUNT_OPTIONS },
-  { code: "UF_CRM_14_1772981424", label: "Special Education", ui: "select", options: DISCOUNT_OPTIONS },
-  { code: "UF_CRM_14_1772981945", label: "Technology", ui: "select", options: DISCOUNT_OPTIONS },
-  { code: "UF_CRM_14_1772982139", label: "SI Manufacturing", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772976870", label: "Art Category", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772978571", label: "Elementary Math", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772979400", label: "Early Years", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772980445", label: "Healthcare", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772980703", label: "Literacy", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772980862", label: "Physical Education", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772981401", label: "Science", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772981424", label: "Special Education", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772981945", label: "Technology", ui: "select", options: DISCOUNT_OPTIONS },
+    { code: "UF_CRM_14_1772982139", label: "SI Manufacturing", ui: "select", options: DISCOUNT_OPTIONS },
 
-  { code: "UF_CRM_14_1772982287", label: "Eligible for Ext?", ui: "boolean" },
-  { code: "UF_CRM_14_1772982484", label: "Tender Platform", ui: "text" },
-  { code: "UF_CRM_14_1772982539", label: "Value of Total Tender", ui: "money" },
-  { code: "UF_CRM_14_1772982627", label: "Awarded Value", ui: "money" },
-  { code: "UF_CRM_14_1772982653", label: "Estimated Margin", ui: "number" },
-  { code: "UF_CRM_14_1772982708", label: "Tender Contact", ui: "text" }
-];
+    { code: "UF_CRM_14_1772982287", label: "Eligible for Ext?", ui: "boolean" },
+    { code: "UF_CRM_14_1772982484", label: "Tender Platform", ui: "text" },
+    { code: "UF_CRM_14_1772982539", label: "Value of Total Tender", ui: "money" },
+    { code: "UF_CRM_14_1772982627", label: "Awarded Value", ui: "money" },
+    { code: "UF_CRM_14_1772982653", label: "Estimated Margin", ui: "number" },
+    { code: "UF_CRM_14_1772982708", label: "Tender Contact", ui: "text" }
+  ];
 
   const statusEl = document.getElementById("status");
   const headRow = document.getElementById("headRow");
@@ -119,6 +120,7 @@ const FIELDS = [
 
   let companyId = "";
   let rowsData = [];
+  const autoTimers = new Map();
 
   function setStatus(msg) { statusEl.textContent = msg; }
   function errText(e) { return String(e && e.message ? e.message : e); }
@@ -126,7 +128,9 @@ const FIELDS = [
   function call(method, params = {}) {
     return new Promise((resolve, reject) => {
       BX24.callMethod(method, params, (resObj) => {
-        if (resObj.error()) return reject((resObj.error() || "Error") + (resObj.error_description ? " - " + resObj.error_description : ""));
+        if (resObj.error()) {
+          return reject((resObj.error() || "Error") + (resObj.error_description ? " - " + resObj.error_description : ""));
+        }
         resolve(resObj.data());
       });
     });
@@ -224,6 +228,8 @@ const FIELDS = [
 
       bodyRows.appendChild(tr);
     });
+
+    wireAutoSave();
   }
 
   function parsePlacementOptions() {
@@ -294,10 +300,7 @@ const FIELDS = [
 
   function sanitizeValue(field, raw) {
     const v = String(raw || "").trim();
-
-    if (field.ui === "money" || field.ui === "number") {
-      return v.replace(/[$,]/g, "");
-    }
+    if (field.ui === "money" || field.ui === "number") return v.replace(/[$,]/g, "");
     return v;
   }
 
@@ -320,6 +323,48 @@ const FIELDS = [
 
   function tenderTitle(values) {
     return values["UF_CRM_14_1772974250"] || ("Tender " + new Date().toISOString());
+  }
+
+  async function upsertSingleRow(tr) {
+    const row = { id: tr.dataset.id || "", values: {} };
+
+    FIELDS.forEach(f => {
+      const td = tr.querySelector('td[data-field="' + f.code + '"]');
+      const el = td ? td.querySelector("input,select,textarea") : null;
+      row.values[f.code] = sanitizeValue(f, el && el.value != null ? el.value : "");
+    });
+
+    if (isRowEmpty(row.values)) return;
+
+    const fields = { ...row.values };
+    fields[COMPANY_LINK_FIELD] = String(companyId);
+    fields.title = tenderTitle(row.values);
+
+    if (row.id) {
+      await call("crm.item.update", { entityTypeId: ENTITY_TYPE_ID, id: row.id, fields });
+      setStatus("Auto-saved (updated row " + row.id + ")");
+    } else {
+      const created = await call("crm.item.add", { entityTypeId: ENTITY_TYPE_ID, fields });
+      const newId = (created && created.item && created.item.id) ? created.item.id : (created && created.id ? created.id : "");
+      tr.dataset.id = String(newId || "");
+      setStatus("Auto-saved (created row " + tr.dataset.id + ")");
+    }
+  }
+
+  function wireAutoSave() {
+    bodyRows.querySelectorAll("tr").forEach(tr => {
+      tr.querySelectorAll("input,select,textarea").forEach(el => {
+        const handler = () => {
+          const key = tr;
+          if (autoTimers.has(key)) clearTimeout(autoTimers.get(key));
+          autoTimers.set(key, setTimeout(() => {
+            upsertSingleRow(tr).catch(e => setStatus("Auto-save error: " + errText(e)));
+          }, AUTO_SAVE_DELAY));
+        };
+        el.addEventListener("change", handler);
+        el.addEventListener("blur", handler);
+      });
+    });
   }
 
   async function saveAll() {
@@ -348,8 +393,6 @@ const FIELDS = [
       }
     }
 
-    await loadRecords();
-    renderRows();
     setStatus("Saved. Created=" + created + ", Updated=" + updated + ", Skipped empty=" + skipped);
   }
 
